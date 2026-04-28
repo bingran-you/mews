@@ -28,6 +28,7 @@ import {
   startHttpServer,
   tailAsJsonArray,
 } from "../../src/mews/engine/daemon/http.js";
+import type { DashboardTask } from "../../src/mews/engine/daemon/thread-store.js";
 import {
   encodeSseFrame,
   encodeSseEvent,
@@ -137,6 +138,7 @@ describe("parseRoute", () => {
     expect(parseRoute("GET", "/index.html")).toBe("dashboard");
     expect(parseRoute("GET", "/healthz")).toBe("healthz");
     expect(parseRoute("GET", "/inbox")).toBe("inbox");
+    expect(parseRoute("GET", "/tasks")).toBe("tasks");
     expect(parseRoute("GET", "/activity")).toBe("activity");
     expect(parseRoute("GET", "/events")).toBe("events");
     // query strings are stripped
@@ -242,14 +244,21 @@ describe("SSE framing — byte-level parity with Rust send_sse", () => {
 /* Integration tests — real bound server                               */
 /* ------------------------------------------------------------------ */
 
-async function startTestServer(ctx: Ctx, busOverride?: SseBus) {
+async function startTestServer(
+  ctx: Ctx,
+  options: {
+    busOverride?: SseBus;
+    tasksProvider?: () => DashboardTask[];
+  } = {},
+) {
   const controller = new AbortController();
   const server = await startHttpServer({
     httpPort: 0, // ephemeral port
     inboxPath: ctx.inbox,
     activityLogPath: ctx.activity,
     signal: controller.signal,
-    bus: busOverride,
+    bus: options.busOverride,
+    tasksProvider: options.tasksProvider,
     logger: SILENT_LOGGER,
     // speed up keep-alive cadence for the test that covers it
     sseKeepAliveMs: 50,
@@ -329,6 +338,40 @@ describe("startHttpServer — route contracts", () => {
     expect(res.body.toString("utf-8")).toBe("inbox.json not found\n");
   });
 
+  it("GET /tasks returns the current task snapshot", async () => {
+    ({ controller, server } = await startTestServer(ctx, {
+      tasksProvider: () => [
+        {
+          task_id: "task-1",
+          status: "simulated",
+          repo: "bingran-you/mews",
+          workspace_repo: "bingran-you/mews",
+          thread_key: "/repos/bingran-you/mews/issues/1",
+          title: "probe",
+          kind: "mention",
+          source: "notifications",
+          updated_at: "2026-04-28T23:00:00Z",
+          started_at: "2026-04-28T23:00:01Z",
+          finished_at: "2026-04-28T23:00:02Z",
+          runner: "",
+          summary: "dry-run scheduled task",
+        },
+      ],
+    }));
+    const res = await fetchRaw(server.port, "/tasks");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(JSON.parse(res.body.toString("utf-8"))).toEqual({
+      tasks: [
+        expect.objectContaining({
+          task_id: "task-1",
+          status: "simulated",
+          title: "probe",
+        }),
+      ],
+    });
+  });
+
   it("GET /activity returns [] when the file is absent (always 200)", async () => {
     ({ controller, server } = await startTestServer(ctx));
     const res = await fetchRaw(server.port, "/activity");
@@ -385,7 +428,7 @@ describe("startHttpServer — /events SSE stream", () => {
 
   it("emits 200 SSE headers + ready frame + bus events byte-for-byte", async () => {
     const manual = makeManualBus();
-    ({ controller, server } = await startTestServer(ctx, manual.bus));
+    ({ controller, server } = await startTestServer(ctx, { busOverride: manual.bus }));
 
     // Open the SSE connection manually so we can read the raw bytes
     // and compare against the Rust fixture frames.
@@ -459,7 +502,7 @@ describe("startHttpServer — /events SSE stream", () => {
 
   it("emits a keep-alive `: ping\\n\\n` comment when the bus is idle", async () => {
     const manual = makeManualBus();
-    ({ controller, server } = await startTestServer(ctx, manual.bus));
+    ({ controller, server } = await startTestServer(ctx, { busOverride: manual.bus }));
 
     let combined = "";
 

@@ -240,10 +240,14 @@ describe("Scheduler.handleCompletion", () => {
       summary: "ok",
     });
     const record = store.loadThreadRecord("/repos/o/r/pulls/5");
+    const meta = store.readTaskMetadata("task-1");
     expect(record.failureCount).toBe(0);
     expect(record.nextRetryEpoch).toBe(0);
     expect(record.lastResult).toBe("handled");
     expect(record.lastHandledUpdatedAt).toBe("2026-04-15T12:00:00Z");
+    expect(meta.get("repo")).toBe("o/r");
+    expect(meta.get("title")).toBe("t");
+    expect(meta.get("status")).toBe("handled");
   });
 
   it("failed status bumps failure_count and schedules retry", () => {

@@ -64,6 +64,7 @@
   .badge.done { background: color-mix(in srgb, var(--done) 15%, transparent); color: var(--done); }
   .label-chip { display: inline-block; font-size: 10px; padding: 0 6px; border-radius: 6px; background: var(--border); color: var(--muted); margin-right: 4px; }
   .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+  .section-title { margin: 22px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -89,9 +90,18 @@
     <tbody id="rows"></tbody>
   </table>
   <div class="empty" id="empty" hidden>No notifications.</div>
+
+  <div class="section-title">tasks</div>
+  <table>
+    <thead><tr>
+      <th>status</th><th>kind</th><th>repo</th><th>title</th><th>summary</th><th class="updated">started</th><th class="updated">finished</th>
+    </tr></thead>
+    <tbody id="task-rows"></tbody>
+  </table>
+  <div class="empty" id="tasks-empty" hidden>No task activity yet.</div>
 </main>
 <script>
-  const state = { inbox: null, filter: "all", query: "" };
+  const state = { inbox: null, tasks: [], filter: "all", query: "" };
 
   function format(ts) {
     if (!ts) return "—";
@@ -146,6 +156,22 @@
     document.getElementById("empty").hidden = rows.length > 0;
   }
 
+  function renderTasks() {
+    const rows = (state.tasks || [])
+      .map(task => `<tr>
+        <td><span class="badge ${(task.status || "done") === "simulated" ? "wip" : escape(task.status || "done")}">${escape(task.status || "done")}</span></td>
+        <td>${escape(task.kind)}</td>
+        <td class="repo">${escape(task.repo)}</td>
+        <td>${escape(task.title)}</td>
+        <td>${escape(task.summary)}</td>
+        <td class="updated" title="${escape(task.started_at)}">${format(task.started_at)}</td>
+        <td class="updated" title="${escape(task.finished_at)}">${format(task.finished_at)}</td>
+      </tr>`)
+      .join("");
+    document.getElementById("task-rows").innerHTML = rows;
+    document.getElementById("tasks-empty").hidden = rows.length > 0;
+  }
+
   async function fetchInbox() {
     try {
       const res = await fetch("/inbox", { cache: "no-store" });
@@ -158,6 +184,19 @@
     }
   }
 
+  async function fetchTasks() {
+    try {
+      const res = await fetch("/tasks", { cache: "no-store" });
+      if (res.ok) {
+        const payload = await res.json();
+        state.tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+        renderTasks();
+      }
+    } catch (error) {
+      console.warn("tasks fetch failed", error);
+    }
+  }
+
   function connectSse() {
     const ev = new EventSource("/events");
     const pill = document.getElementById("sse-status");
@@ -165,8 +204,14 @@
       pill.textContent = "live";
       pill.classList.add("live");
     });
-    ev.addEventListener("inbox", () => fetchInbox());
-    ev.addEventListener("activity", () => fetchInbox());
+    ev.addEventListener("inbox", () => {
+      fetchInbox();
+      fetchTasks();
+    });
+    ev.addEventListener("activity", () => {
+      fetchInbox();
+      fetchTasks();
+    });
     ev.onerror = () => {
       pill.textContent = "offline — retrying";
       pill.classList.remove("live");
@@ -187,6 +232,7 @@
   });
 
   fetchInbox();
+  fetchTasks();
   connectSse();
 </script>
 </body>

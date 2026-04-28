@@ -40,8 +40,13 @@ import { classifyMewsStatus } from "../runtime/classifier.js";
 import { loadMewsConfig } from "../runtime/config.js";
 import { GhClient, GhExecError } from "../runtime/gh.js";
 import { resolveMewsPaths } from "../runtime/paths.js";
+import { RepoFilter } from "../runtime/repo-filter.js";
 import { updateInbox } from "../runtime/store.js";
 import { shouldTrackReason } from "../runtime/task-kind.js";
+import {
+  parseAllowRepoArg,
+  requireExplicitRepoFilter,
+} from "../runtime/allow-repo.js";
 import {
   type GhState,
   type Inbox,
@@ -75,7 +80,7 @@ function formatUtcIso(date: Date): string {
   return `${date.toISOString().slice(0, 19)}Z`;
 }
 
-/** Raw GitHub notification as returned by `/notifications?participating=true`. */
+/** Raw GitHub notification as returned by `/notifications`. */
 interface RawNotification {
   id?: string;
   reason?: string;
@@ -139,6 +144,7 @@ function htmlUrlFor(
 export function parseNotifications(
   rawJsonPages: readonly string[],
   host: string,
+  repoFilter: RepoFilter = RepoFilter.empty(),
 ): InboxEntry[] {
   const entries: InboxEntry[] = [];
   const seenIds = new Set<string>();
@@ -160,6 +166,7 @@ export function parseNotifications(
       if (subjectType === "CheckSuite" || subjectType === "Commit") continue;
       const repo = item.repository?.full_name ?? "";
       if (!repo) continue;
+      if (!repoFilter.matchesRepo(repo)) continue;
       const reason = item.reason ?? "";
       if (!shouldTrackReason(reason)) continue;
       const title = item.subject?.title ?? "";
@@ -530,6 +537,12 @@ export async function runPoll(
   const io = deps.io ?? DEFAULT_IO;
   const config = loadMewsConfig();
   const paths = deps.paths ?? resolveMewsPaths();
+  const repoFilter = (() => {
+    const allowRepo = parseAllowRepoArg(argv);
+    return allowRepo?.trim()
+      ? requireExplicitRepoFilter(allowRepo)
+      : RepoFilter.empty();
+  })();
   const gh = deps.gh ?? new GhClient();
   const now = deps.now ?? (() => new Date());
   const append = deps.appendActivity ?? appendActivityEvent;
@@ -554,9 +567,7 @@ export async function runPoll(
   try {
     const stdout = gh.runChecked("fetch notifications", [
       "api",
-      // See #251: `all=true` bypassed GitHub's spam filter. `participating=true`
-      // restricts to direct-participation notifications.
-      "/notifications?participating=true",
+      "/notifications?all=true&per_page=100",
       "--paginate",
       "-H",
       "X-GitHub-Api-Version: 2022-11-28",
@@ -570,7 +581,7 @@ export async function runPoll(
     throw err;
   }
 
-  const entries = parseNotifications(rawPages, config.host);
+  const entries = parseNotifications(rawPages, config.host, repoFilter);
   sortEntries(entries);
 
   const enrichmentWarning = enrichWithLabels(entries, gh, config.host);

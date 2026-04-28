@@ -182,13 +182,13 @@ describe("pollOnce parity with Rust fetcher", () => {
     expect(outcome.warnings).toEqual([]);
     expect(outcome.rateLimited).toBe(false);
 
-    // #251: must hit /notifications?participating=true (not ?all=true),
-    // which respects GitHub's server-side spam filter.
+    // The daemon monitors the full notification stream, then constrains
+    // visibility by the configured repo allow-list.
     const notifCall = gh.calls.find(
       (argv) => argv[0] === "api" && argv[1]?.startsWith("/notifications"),
     );
     expect(notifCall).toBeDefined();
-    expect(notifCall?.[1]).toBe("/notifications?participating=true");
+    expect(notifCall?.[1]).toBe("/notifications?all=true&per_page=100");
 
     const parsed = JSON.parse(readFileSync(ctx.inbox, "utf-8")) as {
       last_poll: string;

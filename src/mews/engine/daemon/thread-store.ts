@@ -31,6 +31,7 @@ import {
 import { dirname, join } from "node:path";
 
 import {
+  decodeMultiline,
   parseKvLines,
   stableFileId,
 } from "../runtime/task-util.js";
@@ -43,6 +44,22 @@ import {
 
 export interface ThreadStoreOptions {
   runnerHome: string;
+}
+
+export interface DashboardTask {
+  task_id: string;
+  status: string;
+  repo: string;
+  workspace_repo: string;
+  thread_key: string;
+  title: string;
+  kind: string;
+  source: string;
+  updated_at: string;
+  started_at: string;
+  finished_at: string;
+  runner: string;
+  summary: string;
 }
 
 export class ThreadStore {
@@ -113,6 +130,31 @@ export class ThreadStore {
       out.push([name, this.readTaskMetadata(name)]);
     }
     return out;
+  }
+
+  listDashboardTasks(): DashboardTask[] {
+    return this.listTaskMetadata()
+      .map(([taskId, metadata]) => ({
+        task_id: metadata.get("task_id") ?? taskId,
+        status: metadata.get("status") ?? "",
+        repo: metadata.get("repo") ?? "",
+        workspace_repo: metadata.get("workspace_repo") ?? "",
+        thread_key: metadata.get("thread_key") ?? "",
+        title: decodeMultiline(metadata.get("title") ?? ""),
+        kind: metadata.get("kind") ?? "",
+        source: metadata.get("source") ?? "",
+        updated_at: metadata.get("updated_at") ?? "",
+        started_at: metadata.get("started_at") ?? "",
+        finished_at: metadata.get("finished_at") ?? "",
+        runner: metadata.get("runner") ?? "",
+        summary: decodeMultiline(metadata.get("summary") ?? ""),
+      }))
+      .sort((a, b) => {
+        const left = a.started_at || a.updated_at || a.task_id;
+        const right = b.started_at || b.updated_at || b.task_id;
+        if (left === right) return 0;
+        return left < right ? 1 : -1;
+      });
   }
 
   writeRuntimeStatus(values: Record<string, string>): void {

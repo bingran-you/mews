@@ -1,9 +1,8 @@
 # `mews`
 
-Local daemon that takes over your `gh` login and turns explicit GitHub review
-requests and direct mentions into a triaged, optionally auto-handled inbox.
-Drives a Claude Code statusline, an SSE dashboard, and scheduled background
-work.
+Local daemon that monitors GitHub notifications for an allow-listed set of
+repositories, keeps a triaged inbox, exposes a browser dashboard, and can
+dispatch local coding agents in the background.
 
 ## What's In This Directory
 
@@ -32,7 +31,7 @@ mews/
 | `mews status` | Print current daemon/runtime status |
 | `mews doctor` | Diagnose daemon / gh login / runtime health |
 | `mews watch` | Interactive TUI inbox (Ink) |
-| `mews poll` | One-shot inbox poll without requiring the daemon |
+| `mews poll [--allow-repo owner/repo]` | One-shot inbox poll without requiring the daemon |
 
 ### Advanced / internal
 

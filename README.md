@@ -20,5 +20,12 @@ Main commands:
 - `mews status`
 - `mews watch`
 - `mews poll`
+- `pnpm e2e:live`
 
 Runtime data lives under `~/.mews/`.
+
+Live end-to-end:
+
+- `pnpm e2e:live` builds the CLI, starts the daemon in `--dry-run` mode, creates a temporary probe issue in `bingran-you/mews`, uses a secondary GitHub actor to mention the primary user, and verifies `/inbox`, `/tasks`, and the browser dashboard.
+- Set either `MEWS_E2E_SECONDARY_USER` or `MEWS_E2E_SECONDARY_TOKEN`.
+- Run `pnpm e2e:live:install-browser` once before the first browser-backed run.
