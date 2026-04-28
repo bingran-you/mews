@@ -42,6 +42,7 @@ import {
   runSseStream,
   type SseBus,
 } from "./sse.js";
+import type { DashboardTask } from "./thread-store.js";
 
 /**
  * Routes matched against the path component after the query is stripped.
@@ -52,6 +53,7 @@ export type Route =
   | "dashboard"
   | "healthz"
   | "inbox"
+  | "tasks"
   | "activity"
   | "events"
   | "not-found";
@@ -69,6 +71,8 @@ export function parseRoute(method: string, url: string | undefined): Route {
       return "healthz";
     case "/inbox":
       return "inbox";
+    case "/tasks":
+      return "tasks";
     case "/activity":
       return "activity";
     case "/events":
@@ -215,6 +219,19 @@ async function writeInboxJsonFile(
   res.end(contents);
 }
 
+function writeJson(
+  res: ServerResponse,
+  body: string,
+): void {
+  res.writeHead(200, "OK", {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body, "utf-8"),
+    "Cache-Control": "no-store",
+    Connection: "close",
+  });
+  res.end(body);
+}
+
 function writeActivityTail(
   res: ServerResponse,
   activityPath: string,
@@ -264,6 +281,8 @@ export interface StartHttpServerOptions {
   inboxPath: string;
   /** Path to `~/.mews/activity.log`. */
   activityLogPath: string;
+  /** Task metadata snapshot used by the dashboard task pane. */
+  tasksProvider?: () => DashboardTask[];
   /** Shutdown signal. Server closes when this aborts. */
   signal: AbortSignal;
   /**
@@ -343,6 +362,14 @@ export async function startHttpServer(
               );
               if (!res.headersSent) writePlain(res, 404, "inbox.json not found\n");
             });
+            return;
+          case "tasks":
+            writeJson(
+              res,
+              JSON.stringify({
+                tasks: (options.tasksProvider ?? (() => []))(),
+              }),
+            );
             return;
           case "activity":
             writeActivityTail(res, options.activityLogPath, ACTIVITY_TAIL_LIMIT);

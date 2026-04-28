@@ -83,6 +83,33 @@ describe("ThreadStore.{write,read}TaskMetadata", () => {
     expect(list.map(([id]) => id)).toEqual(["task-a", "task-b"]);
     expect(list[1][1].get("status")).toBe("running");
   });
+
+  it("projects dashboard tasks with decoded title and summary", () => {
+    const store = new ThreadStore({ runnerHome: makeHome("dashboard") });
+    store.writeTaskMetadata("task-7", {
+      task_id: "task-7",
+      status: "simulated",
+      repo: "bingran-you/mews",
+      workspace_repo: "bingran-you/mews",
+      thread_key: "/repos/bingran-you/mews/issues/7",
+      title: "demo\\nissue",
+      kind: "mention",
+      source: "notifications",
+      updated_at: "2026-04-28T23:00:00Z",
+      started_at: "2026-04-28T23:00:01Z",
+      finished_at: "2026-04-28T23:00:02Z",
+      runner: "codex",
+      summary: "dry-run\\nscheduled task",
+    });
+    const tasks = store.listDashboardTasks();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      task_id: "task-7",
+      status: "simulated",
+      title: "demo\nissue",
+      summary: "dry-run\nscheduled task",
+    });
+  });
 });
 
 describe("ThreadStore.cleanupOldWorkspaces", () => {

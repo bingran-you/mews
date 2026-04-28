@@ -33,8 +33,7 @@ Primary commands (start here):
   status                Print daemon lock + runtime/status.env
   doctor                Diagnose the local install
   watch                 Live TUI: status board + activity feed
-  poll                  Poll explicit GitHub review requests and mentions
-                        once (no daemon required)
+  poll                  Poll GitHub notifications once (no daemon required)
 
 Advanced commands (for agents or debugging):
   run, daemon           Run the broker loop in the foreground.
@@ -72,6 +71,7 @@ const MEWS_INLINE_HELP: Partial<Record<string, string>> = {
     --task-timeout-secs <n>      Per-task timeout
     --max-parallel <n>           Max concurrent agent tasks
     --search-limit <n>           Max search-derived candidates per cycle
+    --dry-run                    Schedule tasks without invoking agents
 `,
   daemon: `usage: mews daemon [options]
 
@@ -84,6 +84,7 @@ const MEWS_INLINE_HELP: Partial<Record<string, string>> = {
 
   Options:
     --allow-repo <csv>           Required: restrict work to owner/repo or owner/* patterns
+    --dry-run                    Schedule tasks without invoking agents
 `,
   watch: `usage: mews watch
 

@@ -85,10 +85,7 @@ export class GhClient {
       "read recent notifications",
       [
         "api",
-        // See #251: `all=true&participating=false` bypassed GitHub's server-side
-        // spam filter and let mews act on mention-then-delete notifications.
-        // `participating=true` restricts to direct-participation notifications.
-        "/notifications?participating=true&per_page=100",
+        "/notifications?all=true&per_page=100",
         "--paginate",
         "-H",
         "X-GitHub-Api-Version: 2022-11-28",

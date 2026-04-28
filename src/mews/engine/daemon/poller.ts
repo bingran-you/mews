@@ -40,6 +40,7 @@ import { existsSync, mkdirSync } from "node:fs";
 
 import { appendActivityEvent } from "../runtime/activity-log.js";
 import { GhClient, GhExecError } from "../runtime/gh.js";
+import { RepoFilter } from "../runtime/repo-filter.js";
 import type { MewsPaths } from "../runtime/paths.js";
 import { updateInbox } from "../runtime/store.js";
 import {
@@ -73,6 +74,8 @@ export interface PollerOptions {
   gh?: GhClient;
   /** Filesystem layout. Production code passes `resolveMewsPaths()`. */
   paths: MewsPaths;
+  /** Restrict inbox visibility to the same allow-list used by dispatch. */
+  repoFilter?: RepoFilter;
   /** Abort signal for cooperative shutdown (wired from SIGTERM handler). */
   signal?: AbortSignal;
   /** `Date.now`-style clock override for tests. */
@@ -102,6 +105,7 @@ interface PollOnceDeps {
   paths: MewsPaths;
   host: string;
   now: () => number;
+  repoFilter?: RepoFilter;
 }
 
 /** Seconds-precision ISO-8601 UTC, matching `date -u +%Y-%m-%dT%H:%M:%SZ`. */
@@ -174,14 +178,7 @@ export async function pollOnce(deps: PollOnceDeps): Promise<PollOutcome> {
   try {
     const stdout = gh.runChecked("fetch notifications", [
       "api",
-      // `participating=true` restricts to direct-participation notifications
-      // and respects GitHub's server-side spam filter. `parseNotifications`
-      // further narrows those results to explicit mentions and review
-      // requests so mews does not act on generic author/assignee/comment
-      // traffic. `?all=true` was previously used here but bypassed the
-      // filter, causing mews to act on mention-then-delete spam surfaced
-      // to no one in the UI (#251).
-      "/notifications?participating=true",
+      "/notifications?all=true&per_page=100",
       "--paginate",
       "-H",
       "X-GitHub-Api-Version: 2022-11-28",
@@ -204,7 +201,7 @@ export async function pollOnce(deps: PollOnceDeps): Promise<PollOutcome> {
     throw err;
   }
 
-  const entries = parseNotifications(rawPages, host);
+  const entries = parseNotifications(rawPages, host, deps.repoFilter ?? RepoFilter.empty());
   sortEntries(entries);
 
   const enrichmentWarning = enrichWithLabels(entries, gh, host);
@@ -285,6 +282,7 @@ export async function runPoller(options: PollerOptions): Promise<void> {
         paths: options.paths,
         host: options.host,
         now,
+        repoFilter: options.repoFilter ?? RepoFilter.empty(),
       });
     } catch (err) {
       // Local/setup error (not a gh-side failure). Log and retry after

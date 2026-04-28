@@ -139,6 +139,10 @@ describe("parseDaemonArgs", () => {
     expect(out.maxParallel).toBe(11);
     expect(out.searchLimit).toBe(31);
   });
+
+  it("parses --dry-run as a boolean switch", () => {
+    expect(parseDaemonArgs(["--dry-run"]).dryRun).toBe(true);
+  });
 });
 
 describe("extractBackendFlag", () => {

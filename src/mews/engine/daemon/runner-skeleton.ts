@@ -72,6 +72,8 @@ export interface DaemonCliOverrides {
    * Patterns are `owner/repo` or `owner/*`.
    */
   allowRepo?: string;
+  /** When true, schedule tasks without invoking agents. */
+  dryRun?: boolean;
 }
 
 export interface DaemonRunOptions {
@@ -113,6 +115,7 @@ const DEFAULT_LOGGER: PollerLogger = {
  *   --search-limit <n>
  *   --allow-repo <csv>            (owner/repo,owner/* — required for daemon
  *                                  startup; scopes the daemon to listed repos)
+ *   --dry-run                     schedule tasks without invoking agents
  *
  * Both `--flag value` and `--flag=value` forms are accepted for
  * `--allow-repo`, `--max-parallel`, and `--search-limit`.
@@ -153,6 +156,9 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonCliOverrides {
         }
         break;
       }
+      case "--dry-run":
+        overrides.dryRun = true;
+        break;
       case "--poll-interval-secs":
       case "--poll-interval-sec": {
         const value = next();
@@ -393,7 +399,7 @@ export async function runDaemon(
   runtimeTicker.unref?.();
 
   logger.info(
-    `mews daemon: poll-interval=${config.pollIntervalSec}s host=${config.host} http-port=${config.httpPort} max-parallel=${config.maxParallel} search-limit=${config.searchLimit} allow-repo=${repoFilter.isEmpty() ? "all" : repoFilter.displayPatterns()}`,
+    `mews daemon: poll-interval=${config.pollIntervalSec}s host=${config.host} http-port=${config.httpPort} max-parallel=${config.maxParallel} search-limit=${config.searchLimit} allow-repo=${repoFilter.isEmpty() ? "all" : repoFilter.displayPatterns()} dry-run=${cliOverrides.dryRun ? "true" : "false"}`,
   );
 
   // Phase 3c: shared in-process bus drives SSE + broker task events.
@@ -468,6 +474,7 @@ export async function runDaemon(
           "This reply was drafted by mews, an autonomous agent running on behalf of the account owner.",
         maxParallel: config.maxParallel,
         taskTimeoutMs: config.taskTimeoutSec * 1_000,
+        dryRun: cliOverrides.dryRun === true,
         logger,
         onCompletion: (record) => scheduler.handleCompletion(record),
       });
@@ -530,13 +537,14 @@ export async function runDaemon(
   let httpServer: RunningHttpServer | null = null;
   if (!controller.signal.aborted) {
     try {
-      httpServer = await startHttpServer({
-        httpPort: config.httpPort,
-        inboxPath: paths.inbox,
-        activityLogPath: paths.activityLog,
-        bus: toSseBus(bus),
-        signal: controller.signal,
-        logger,
+        httpServer = await startHttpServer({
+          httpPort: config.httpPort,
+          inboxPath: paths.inbox,
+          activityLogPath: paths.activityLog,
+          tasksProvider: () => runtimeStore.listDashboardTasks(),
+          bus: toSseBus(bus),
+          signal: controller.signal,
+          logger,
       });
     } catch (err) {
       logger.error(
@@ -558,7 +566,7 @@ export async function runDaemon(
       // One-shot: run a single poll cycle, then wait for the
       // dispatcher to drain. Also run one candidate-search cycle so
       // assigned/review-requested work is not lost before shutdown.
-      await runPollerOnce(config, paths, controller.signal, logger);
+      await runPollerOnce(config, paths, repoFilter, controller.signal, logger);
       if (candidateRuntime) {
         const outcome = await runCandidateCycle(
           {
@@ -579,6 +587,7 @@ export async function runDaemon(
         pollIntervalSec: config.pollIntervalSec,
         host: config.host,
         paths,
+        repoFilter,
         signal: controller.signal,
         logger,
       });
@@ -713,6 +722,7 @@ function logCandidateOutcome(
 async function runPollerOnce(
   config: DaemonConfig,
   paths: MewsPaths,
+  repoFilter: RepoFilter,
   signal: AbortSignal,
   logger: PollerLogger,
 ): Promise<void> {
@@ -721,6 +731,7 @@ async function runPollerOnce(
     const outcome = await pollOnce({
       gh: new CoreGhClient(),
       paths,
+      repoFilter,
       host: config.host,
       now: Date.now,
     });

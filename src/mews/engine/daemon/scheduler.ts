@@ -139,6 +139,19 @@ export class Scheduler {
   handleCompletion(record: CompletionRecord): void {
     const now = this.nowSec();
     const meta = this.store.readTaskMetadata(record.taskId);
+    meta.set("task_id", record.taskId);
+    meta.set("repo", record.candidate.repo);
+    meta.set(
+      "workspace_repo",
+      record.candidate.workspaceRepo?.trim().length
+        ? record.candidate.workspaceRepo
+        : record.candidate.repo,
+    );
+    meta.set("thread_key", record.threadKey);
+    meta.set("title", encodeMultiline(record.candidate.title));
+    meta.set("kind", record.candidate.kind);
+    meta.set("updated_at", record.candidate.updatedAt);
+    if (!meta.has("started_at")) meta.set("started_at", String(now));
     meta.set("finished_at", String(now));
 
     let threadRecord = this.store.loadThreadRecord(record.threadKey);
