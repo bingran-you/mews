@@ -1,0 +1,54 @@
+{
+  "name": "mews",
+  "version": "0.1.0",
+  "description": "A local daemon that watches GitHub notifications and dispatches Codex CLI or Claude Code tasks.",
+  "homepage": "https://github.com/bingran-you/mews#readme",
+  "bugs": {
+    "url": "https://github.com/bingran-you/mews/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bingran-you/mews.git"
+  },
+  "keywords": [
+    "mews",
+    "github",
+    "notifications",
+    "daemon",
+    "codex",
+    "claude-code"
+  ],
+  "type": "module",
+  "bin": {
+    "mews": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "src/mews/VERSION"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "pnpm build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/react": "^19.2.14",
+    "ink-testing-library": "^4.0.0",
+    "tsdown": "^0.12.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  },
+  "dependencies": {
+    "ink": "^7.0.0",
+    "proper-lockfile": "^4.1.2",
+    "react": "^19.2.5",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  }
+}
