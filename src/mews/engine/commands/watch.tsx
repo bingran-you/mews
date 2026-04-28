@@ -1,14 +1,14 @@
 /**
- * TS port of `breeze-watch` + `WATCH_DESIGN.md`.
+ * TS port of `mews-watch` + `WATCH_DESIGN.md`.
  *
  * A read-only TUI board rendered with `ink` (React-for-terminals):
- *   - header: "breeze status board" + status-count summary
+ *   - header: "mews status board" + status-count summary
  *   - HUMAN section: always shown, red, critical items
  *   - Board: repos grouped by status (orange NEW, blue WIP, dim green DONE)
  *   - Live feed: tails `activity.log` and renders new events as they arrive
  *
- * Read-only: watches `~/.breeze/inbox.json` (polled) and
- * `~/.breeze/activity.log` (tailed via fs.watch). No writes.
+ * Read-only: watches `~/.mews/inbox.json` (polled) and
+ * `~/.mews/activity.log` (tailed via fs.watch). No writes.
  *
  * Clean shutdown: ink's `useApp().exit()` on Ctrl-C restores cursor/raw-mode.
  */
@@ -25,11 +25,11 @@ import React, {
 } from "react";
 import { Box, render, Text, useApp, useInput } from "ink";
 
-import { resolveBreezePaths } from "../runtime/paths.js";
+import { resolveMewsPaths } from "../runtime/paths.js";
 import {
   type ActivityEvent,
   ActivityEventSchema,
-  type BreezeStatus,
+  type MewsStatus,
   type Inbox,
   InboxSchema,
 } from "../runtime/types.js";
@@ -47,7 +47,7 @@ const INBOX_POLL_MS = 1000;
 const LIVE_FEED_HISTORY = 20;
 
 interface WatchDeps {
-  paths?: ReturnType<typeof resolveBreezePaths>;
+  paths?: ReturnType<typeof resolveMewsPaths>;
   /** Override render target for tests (ink-testing-library). */
   renderImpl?: typeof render;
   /** Override inbox poll interval. */
@@ -87,7 +87,7 @@ function localTime(iso: string): string {
   return d.toTimeString().slice(0, 8);
 }
 
-function statusColor(s: BreezeStatus): string {
+function statusColor(s: MewsStatus): string {
   switch (s) {
     case "human":
       return COLOR.red;
@@ -100,21 +100,19 @@ function statusColor(s: BreezeStatus): string {
   }
 }
 
-function statusLabel(s: BreezeStatus): string {
+function statusLabel(s: MewsStatus): string {
   return s.toUpperCase();
 }
 
 // --- header ---
 
 const HeaderBanner = (): React.ReactElement => {
-  // Rainbow-tinted "breeze" letters; each letter a fixed colour.
+  // Rainbow-tinted "mews" letters; each letter a fixed colour.
   const letters: Array<[string, string]> = [
-    ["b", "red"],
-    ["r", "#ff8700"],
-    ["e", "#ffd700"],
-    ["e", "#00ff00"],
-    ["z", "#00ffff"],
-    ["e", "#0087ff"],
+    ["m", "red"],
+    ["e", "#ff8700"],
+    ["w", "#00ffff"],
+    ["s", "#00ff00"],
   ];
   return (
     <Box>
@@ -169,7 +167,7 @@ interface HumanSectionProps {
 
 const HumanSection = ({ inbox }: HumanSectionProps): React.ReactElement => {
   const humans = inbox?.notifications.filter(
-    (n) => n.breeze_status === "human",
+    (n) => n.mews_status === "human",
   ) ?? [];
   if (humans.length === 0) {
     return (
@@ -222,11 +220,11 @@ const Board = ({ inbox }: BoardProps): React.ReactElement | null => {
     >();
     if (!inbox) return [];
     for (const n of inbox.notifications) {
-      if (n.breeze_status === "human") continue;
+      if (n.mews_status === "human") continue;
       const row = byRepo.get(n.repo) ?? { new: [], wip: [], done: [] };
-      if (n.breeze_status === "new") row.new.push(n);
-      else if (n.breeze_status === "wip") row.wip.push(n);
-      else if (n.breeze_status === "done") row.done.push(n);
+      if (n.mews_status === "new") row.new.push(n);
+      else if (n.mews_status === "wip") row.wip.push(n);
+      else if (n.mews_status === "done") row.done.push(n);
       byRepo.set(n.repo, row);
     }
     // Sort repos by open count desc. Drop repos with zero open items.
@@ -382,20 +380,20 @@ const LiveEvent = ({ event }: LiveEventProps): React.ReactElement | null => {
 
 // --- root component ---
 
-export interface BreezeWatchProps {
+export interface MewsWatchProps {
   inbox: Inbox | null;
   events: readonly ActivityEvent[];
 }
 
-export const BreezeWatch = ({
+export const MewsWatch = ({
   inbox,
   events,
-}: BreezeWatchProps): React.ReactElement => {
+}: MewsWatchProps): React.ReactElement => {
   const counts = useMemo(() => {
     const out = { human: 0, new: 0, wip: 0, done: 0 };
     if (!inbox) return out;
     for (const n of inbox.notifications) {
-      out[n.breeze_status] += 1;
+      out[n.mews_status] += 1;
     }
     return out;
   }, [inbox]);
@@ -431,14 +429,14 @@ function safeParseActivity(line: string): ActivityEvent | null {
 
 /**
  * Inner component that owns the live data streams. Separated from
- * `BreezeWatch` (the pure view) so ink-testing-library can render the view
+ * `MewsWatch` (the pure view) so ink-testing-library can render the view
  * with canned props without touching the filesystem.
  */
 const WatchApp = ({
   paths,
   inboxPollMs,
 }: {
-  paths: ReturnType<typeof resolveBreezePaths>;
+  paths: ReturnType<typeof resolveMewsPaths>;
   inboxPollMs: number;
 }): React.ReactElement => {
   const [inbox, setInbox] = useState<Inbox | null>(null);
@@ -553,11 +551,11 @@ const WatchApp = ({
     };
   }, [paths.activityLog, inboxPollMs]);
 
-  return <BreezeWatch inbox={inbox} events={events} />;
+  return <MewsWatch inbox={inbox} events={events} />;
 };
 
 /**
- * Entry point for `first-tree breeze watch`.
+ * Entry point for `mews watch`.
  *
  * Returns the exit code (always 0 for now — Ctrl-C exits cleanly).
  */
@@ -565,7 +563,7 @@ export async function runWatch(
   _argv: readonly string[],
   deps: WatchDeps = {},
 ): Promise<number> {
-  const paths = deps.paths ?? resolveBreezePaths();
+  const paths = deps.paths ?? resolveMewsPaths();
   const renderImpl = deps.renderImpl ?? render;
   const inboxPollMs = deps.inboxPollMs ?? INBOX_POLL_MS;
 

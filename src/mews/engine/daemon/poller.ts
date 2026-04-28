@@ -1,11 +1,11 @@
 /**
- * TypeScript port of the Rust breeze daemon's notification poller
+ * TypeScript port of the Rust mews daemon's notification poller
  * (`fetcher.rs`, ~981 lines).
  *
  * SINGLE-WRITER RULE (spec doc 2 §1.3, matches core/store.ts):
  * -------------------------------------------------------------
  * This module — specifically `pollOnce` — is the ONLY writer of
- * `~/.breeze/inbox.json` under the TS daemon backend. Broker, HTTP, and
+ * `~/.mews/inbox.json` under the TS daemon backend. Broker, HTTP, and
  * bus (Phase 3b/3c) are read-only with respect to the inbox.
  *
  * The on-disk format is bit-compatible with the Rust fetcher:
@@ -28,7 +28,7 @@
  *     `gh_executor.rs::{GhExecutor,is_rate_limited,command_is_mutating}`
  *
  * Thin relationship to `commands/poll.ts`:
- *   - `poll.ts` is the one-shot CLI (`first-tree breeze poll`) that
+ *   - `poll.ts` is the one-shot CLI (`mews poll`) that
  *     executes exactly one fetch + write + exit. It is tested standalone.
  *   - This daemon poller wraps the same core functions (`parseNotifications`,
  *     `sortEntries`, `enrichWithLabels`, `classifyEntries`, `diffEvents`)
@@ -40,7 +40,7 @@ import { existsSync, mkdirSync } from "node:fs";
 
 import { appendActivityEvent } from "../runtime/activity-log.js";
 import { GhClient, GhExecError } from "../runtime/gh.js";
-import type { BreezePaths } from "../runtime/paths.js";
+import type { MewsPaths } from "../runtime/paths.js";
 import { updateInbox } from "../runtime/store.js";
 import {
   classifyEntries,
@@ -71,8 +71,8 @@ export interface PollerOptions {
   host: string;
   /** Injected `gh` wrapper. Tests supply a stub. */
   gh?: GhClient;
-  /** Filesystem layout. Production code passes `resolveBreezePaths()`. */
-  paths: BreezePaths;
+  /** Filesystem layout. Production code passes `resolveMewsPaths()`. */
+  paths: MewsPaths;
   /** Abort signal for cooperative shutdown (wired from SIGTERM handler). */
   signal?: AbortSignal;
   /** `Date.now`-style clock override for tests. */
@@ -99,7 +99,7 @@ export interface PollOutcome {
 
 interface PollOnceDeps {
   gh: GhClient;
-  paths: BreezePaths;
+  paths: MewsPaths;
   host: string;
   now: () => number;
 }
@@ -177,9 +177,9 @@ export async function pollOnce(deps: PollOnceDeps): Promise<PollOutcome> {
       // `participating=true` restricts to direct-participation notifications
       // and respects GitHub's server-side spam filter. `parseNotifications`
       // further narrows those results to explicit mentions and review
-      // requests so breeze does not act on generic author/assignee/comment
+      // requests so mews does not act on generic author/assignee/comment
       // traffic. `?all=true` was previously used here but bypassed the
-      // filter, causing breeze to act on mention-then-delete spam surfaced
+      // filter, causing mews to act on mention-then-delete spam surfaced
       // to no one in the UI (#251).
       "/notifications?participating=true",
       "--paginate",
@@ -252,7 +252,7 @@ export async function pollOnce(deps: PollOnceDeps): Promise<PollOutcome> {
   }
 
   const total = entries.length;
-  const newCount = entries.filter((e) => e.breeze_status === "new").length;
+  const newCount = entries.filter((e) => e.mews_status === "new").length;
   return { total, newCount, warnings, rateLimited: false };
 }
 
@@ -309,7 +309,7 @@ export async function runPoller(options: PollerOptions): Promise<void> {
 
     rateLimitStreak = 0;
     logger.info(
-      `breeze: polled ${outcome.total} notifications (${outcome.newCount} new)`,
+      `mews: polled ${outcome.total} notifications (${outcome.newCount} new)`,
     );
     await sleep(options.pollIntervalSec * 1000, signal);
   }

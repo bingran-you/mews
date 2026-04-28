@@ -59,9 +59,9 @@ export function supportsLaunchd(): boolean {
   }
 }
 
-/** `com.breeze.runner.<login>.<profile>` — matches Rust `launchd_label`. */
+/** `com.mews.runner.<login>.<profile>` — matches Rust `launchd_label`. */
 export function launchdLabel(login: string, profile: string): string {
-  return `com.breeze.runner.${sanitizeFilename(login)}.${sanitizeFilename(profile)}`;
+  return `com.mews.runner.${sanitizeFilename(login)}.${sanitizeFilename(profile)}`;
 }
 
 /**
@@ -95,8 +95,8 @@ export function launchdDomain(): string {
  * `passthrough_launchd_env_vars`. Caller-supplied `env` overrides.
  */
 export const PASSTHROUGH_ENV_VARS: readonly string[] = [
-  "BREEZE_DIR",
-  "BREEZE_HOME",
+  "MEWS_DIR",
+  "MEWS_HOME",
   "AZURE_OPENAI_ENDPOINT",
   "AZURE_OPENAI_API_KEY",
   "AZURE_OPENAI_ENDPOINT_BACKUP",
@@ -115,7 +115,7 @@ export const PASSTHROUGH_ENV_VARS: readonly string[] = [
  * the small Rust-era static allowlist above (for example Azure test slots,
  * OpenAI-compatible base URLs, Bedrock/Vertex creds). Discover those families
  * dynamically so background launchd jobs inherit the same auth context as the
- * interactive shell that started Breeze.
+ * interactive shell that started Mews.
  */
 export const PASSTHROUGH_ENV_PREFIXES: readonly string[] = [
   "AZURE_OPENAI_",
@@ -206,7 +206,7 @@ export function escapeXml(value: string): string {
 }
 
 /**
- * Build the plist XML for a breeze-runner launchd job. Byte-shape match
+ * Build the plist XML for a mews-runner launchd job. Byte-shape match
  * with Rust `launchd_plist_contents`.
  */
 export function renderLaunchdPlist(inputs: LaunchdPlistInputs): string {

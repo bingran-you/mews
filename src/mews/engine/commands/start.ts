@@ -10,7 +10,7 @@ import { mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 
-import { loadBreezeDaemonConfig } from "../runtime/config.js";
+import { loadMewsDaemonConfig } from "../runtime/config.js";
 import {
   parseAllowRepoArg,
   requireExplicitRepoFilter,
@@ -25,7 +25,7 @@ import { resolveRunnerHome } from "../daemon/runner-skeleton.js";
 
 export interface RunStartOptions {
   write?: (line: string) => void;
-  breezeDir?: string;
+  mewsDir?: string;
   runnerHome?: string;
   profile?: string;
   /** CLI executable. Defaults to the current Node binary. */
@@ -59,29 +59,29 @@ export async function runStart(
     requireExplicitRepoFilter(parseAllowRepoArg(argv));
   } catch (err) {
     write(
-      `breeze: start failed: ${err instanceof Error ? err.message : String(err)}`,
+      `mews: start failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return 1;
   }
   const home = options.runnerHome ?? parseHome(argv) ?? resolveRunnerHome();
-  const breezeDir =
-    options.breezeDir ?? process.env.BREEZE_DIR ?? dirname(home);
+  const mewsDir =
+    options.mewsDir ?? process.env.MEWS_DIR ?? dirname(home);
   const profile = options.profile ?? parseProfile(argv) ?? "default";
-  const config = loadBreezeDaemonConfig();
+  const config = loadMewsDaemonConfig();
 
   let identity;
   try {
     identity = resolveDaemonIdentity({ host: config.host });
   } catch (err) {
     write(
-      `breeze: start failed: ${err instanceof Error ? err.message : String(err)}`,
+      `mews: start failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return 1;
   }
 
   // #293: detect a live daemon and refuse to silently no-op. The bootstrap
   // path below is idempotent at the launchd level, but it doesn't update
-  // the running process's allow-list — users kept running `breeze start`
+  // the running process's allow-list — users kept running `mews start`
   // with a new --allow-repo and seeing no effect. Fail loudly so the user
   // knows to stop first.
   const existingLock = findServiceLock(
@@ -100,13 +100,13 @@ export async function runStart(
       profile: options.profile ?? parseProfile(argv),
     });
     write(
-      `breeze: daemon already running (pid ${existingLock.pid}).`,
+      `mews: daemon already running (pid ${existingLock.pid}).`,
     );
     write(
       "  The live daemon's --allow-repo list is baked in at start time and",
     );
     write(
-      "  will not update if you edit ~/.breeze/config.yaml or re-run `start`.",
+      "  will not update if you edit ~/.mews/config.yaml or re-run `start`.",
     );
     write(
       `  Run \`${stopCmd}\` first, then re-run \`start\` with the`,
@@ -118,7 +118,7 @@ export async function runStart(
   const logsDir = join(home, "logs");
   mkdirSync(logsDir, { recursive: true });
   const nowSec = Math.floor(Date.now() / 1_000);
-  const logPath = join(logsDir, `breeze-daemon-${nowSec}.log`);
+  const logPath = join(logsDir, `mews-daemon-${nowSec}.log`);
 
   const self = resolveSelfCliInvocation(options.entrypoint);
   const executable = options.executable ?? self.executable;
@@ -136,18 +136,18 @@ export async function runStart(
         arguments: daemonArgs,
         logPath,
         env: {
-          BREEZE_DIR: breezeDir,
-          BREEZE_HOME: home,
+          MEWS_DIR: mewsDir,
+          MEWS_HOME: home,
         },
       });
-      write("breeze-daemon started in background via launchd");
+      write("mews-daemon started in background via launchd");
       write(`plist: ${result.plistPath}`);
       write(`log: ${logPath}`);
       write(`label: ${result.label}`);
       return 0;
     } catch (err) {
       write(
-        `breeze: launchd bootstrap failed (${err instanceof Error ? err.message : String(err)}), falling back to detached spawn`,
+        `mews: launchd bootstrap failed (${err instanceof Error ? err.message : String(err)}), falling back to detached spawn`,
       );
     }
   }
@@ -160,17 +160,17 @@ export async function runStart(
   });
   child.unref();
   if (!child.pid) {
-    write("breeze: failed to spawn detached daemon process");
+    write("mews: failed to spawn detached daemon process");
     return 1;
   }
-  write("breeze-daemon started via detached spawn");
+  write("mews-daemon started via detached spawn");
   write(`pid: ${child.pid}`);
   write(`log: ${logPath}`);
   return 0;
 }
 
 /**
- * Build the `breeze stop` suggestion shown when we refuse to start
+ * Build the `mews stop` suggestion shown when we refuse to start
  * because a live daemon is already running. If the current invocation
  * resolved a non-default `--home`/`--profile`, surface those flags so
  * the user targets the same runner instead of silently stopping the
@@ -180,7 +180,7 @@ function formatStopCommand(opts: {
   home?: string;
   profile?: string;
 }): string {
-  const parts = ["first-tree breeze stop"];
+  const parts = ["mews stop"];
   if (opts.home) parts.push(`--home ${shellQuote(opts.home)}`);
   if (opts.profile && opts.profile !== "default") {
     parts.push(`--profile ${shellQuote(opts.profile)}`);
@@ -221,7 +221,7 @@ export function defaultDaemonArgs(
   argv: readonly string[],
   prefixArgs: readonly string[] = [],
 ): string[] {
-  // The ported daemon entrypoint is `first-tree breeze daemon --backend=ts`.
+  // The ported daemon entrypoint is `mews daemon --backend=ts`.
   const forwarded: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -234,5 +234,5 @@ export function defaultDaemonArgs(
     if (a.startsWith("--home=") || a.startsWith("--profile=")) continue;
     forwarded.push(a);
   }
-  return [...prefixArgs, "breeze", "daemon", "--backend=ts", ...forwarded];
+  return [...prefixArgs, "mews", "daemon", "--backend=ts", ...forwarded];
 }

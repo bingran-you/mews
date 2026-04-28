@@ -10,11 +10,11 @@
  *   - `scopes` — OAuth scope list; used by `hasRequiredScope` to warn if
  *     the token lacks `repo`/`notifications`
  *   - `lockKey(profile)` — `host__login__profile`, used by the broker
- *     lock directory (`~/.breeze/runner/locks/<lockKey>/`). Phase 3c
+ *     lock directory (`~/.mews/runner/locks/<lockKey>/`). Phase 3c
  *     consumes this; we produce it now so identity is stable.
  *
  * Caching: delegates to `runtime/identity-cache.ts`'s 24h-TTL JSON file at
- * `~/.breeze/identity.json`. The core cache only stores `{login, host,
+ * `~/.mews/identity.json`. The core cache only stores `{login, host,
  * fetched_at_ms}` because one-shot callers don't need scopes. The
  * daemon fetches the richer payload via `gh auth status --json hosts`
  * and keeps it in memory for the lifetime of the daemon process.

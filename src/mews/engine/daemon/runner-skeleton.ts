@@ -7,10 +7,10 @@
  * cascades through a single AbortController.
  *
  * Launch path:
- *   `first-tree breeze daemon --backend=ts`
- * delegates here via `src/products/breeze/cli.ts`. The `rust` backend
- * continues to route through `bridge.ts::resolveBreezeRunner` and the
- * Rust `breeze-runner` binary; nothing in this file touches that path.
+ *   `mews daemon --backend=ts`
+ * delegates here via `src/products/mews/cli.ts`. The `rust` backend
+ * continues to route through `bridge.ts::resolveMewsRunner` and the
+ * Rust `mews-runner` binary; nothing in this file touches that path.
  *
  * Shutdown contract:
  *   - SIGTERM / SIGINT cascade through a single AbortController.
@@ -32,8 +32,8 @@ import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { resolveBreezePaths } from "../runtime/paths.js";
-import { loadBreezeDaemonConfig, type DaemonConfig } from "../runtime/config.js";
+import { resolveMewsPaths } from "../runtime/paths.js";
+import { loadMewsDaemonConfig, type DaemonConfig } from "../runtime/config.js";
 
 import {
   resolveDaemonIdentity,
@@ -44,7 +44,7 @@ import { acquireServiceLock, type ServiceLockHandle } from "./claim.js";
 import { startHttpServer, type RunningHttpServer } from "./http.js";
 import { pollOnce, runPoller, type PollerLogger } from "./poller.js";
 import { GhClient as CoreGhClient } from "../runtime/gh.js";
-import type { BreezePaths } from "../runtime/paths.js";
+import type { MewsPaths } from "../runtime/paths.js";
 import { createBus, toSseBus, type Bus } from "./bus.js";
 import { startGhBroker, type RunningBroker } from "./broker.js";
 import { GhExecutor } from "./gh-executor.js";
@@ -100,7 +100,7 @@ const DEFAULT_LOGGER: PollerLogger = {
 
 /**
  * Parse the `--backend=...` / `--poll-interval-secs` style argv the
- * daemon accepts. Very small on purpose; breeze-runner has ~20 flags
+ * daemon accepts. Very small on purpose; mews-runner has ~20 flags
  * but Phase 3a only needs a handful for the read path.
  *
  * Recognised flags:
@@ -274,7 +274,7 @@ export async function runDaemon(
 
   let config: DaemonConfig;
   try {
-    config = loadBreezeDaemonConfig({ cliOverrides });
+    config = loadMewsDaemonConfig({ cliOverrides });
   } catch (err) {
     logger.error(
       `failed to load daemon config: ${err instanceof Error ? err.message : String(err)}`,
@@ -282,7 +282,7 @@ export async function runDaemon(
     return 1;
   }
 
-  const paths = resolveBreezePaths();
+  const paths = resolveMewsPaths();
   const runnerHome = resolveRunnerHome();
 
   // Identity resolution is best-effort at startup. The daemon will still
@@ -297,7 +297,7 @@ export async function runDaemon(
       );
     } else {
       logger.info(
-        `breeze daemon: identity=${identity.login}@${identity.host}`,
+        `mews daemon: identity=${identity.login}@${identity.host}`,
       );
     }
   } catch (err) {
@@ -329,7 +329,7 @@ export async function runDaemon(
       });
     } catch (err) {
       logger.error(
-        `breeze daemon: refusing to start — ${err instanceof Error ? err.message : String(err)}`,
+        `mews daemon: refusing to start — ${err instanceof Error ? err.message : String(err)}`,
       );
       return 1;
     }
@@ -393,7 +393,7 @@ export async function runDaemon(
   runtimeTicker.unref?.();
 
   logger.info(
-    `breeze daemon: poll-interval=${config.pollIntervalSec}s host=${config.host} http-port=${config.httpPort} max-parallel=${config.maxParallel} search-limit=${config.searchLimit} allow-repo=${repoFilter.isEmpty() ? "all" : repoFilter.displayPatterns()}`,
+    `mews daemon: poll-interval=${config.pollIntervalSec}s host=${config.host} http-port=${config.httpPort} max-parallel=${config.maxParallel} search-limit=${config.searchLimit} allow-repo=${repoFilter.isEmpty() ? "all" : repoFilter.displayPatterns()}`,
   );
 
   // Phase 3c: shared in-process bus drives SSE + broker task events.
@@ -465,14 +465,14 @@ export async function runDaemon(
         ghBrokerDir: broker.brokerDir,
         claimsDir: paths.claimsDir,
         disclosureText:
-          "This reply was drafted by breeze, an autonomous agent running on behalf of the account owner.",
+          "This reply was drafted by mews, an autonomous agent running on behalf of the account owner.",
         maxParallel: config.maxParallel,
         taskTimeoutMs: config.taskTimeoutSec * 1_000,
         logger,
         onCompletion: (record) => scheduler.handleCompletion(record),
       });
       logger.info(
-        `breeze daemon: dispatcher ready (agents=${agents.map((r) => r.kind).join(",")}, broker=${broker.shimDir})`,
+        `mews daemon: dispatcher ready (agents=${agents.map((r) => r.kind).join(",")}, broker=${broker.shimDir})`,
       );
 
       candidateRuntime = {
@@ -512,7 +512,7 @@ export async function runDaemon(
       if (agents.length === 0) missing.push("no codex/claude on PATH");
       if (!realGh) missing.push("no gh on PATH");
       logger.warn(
-        `breeze daemon: skipping broker/dispatcher (${missing.join("; ")})`,
+        `mews daemon: skipping broker/dispatcher (${missing.join("; ")})`,
       );
     }
   } catch (err) {
@@ -645,7 +645,7 @@ export async function runDaemon(
     }
   }
 
-  logger.info("breeze daemon: shutdown complete");
+  logger.info("mews daemon: shutdown complete");
   return exitCode;
 }
 
@@ -676,17 +676,17 @@ export function findExecutable(name: string): string | null {
 }
 
 /**
- * `$BREEZE_HOME` or `$BREEZE_DIR/runner`, defaulting to
- * `~/.breeze/runner`. Matches `resolve_inbox_dir` in Rust `fetcher.rs`.
+ * `$MEWS_HOME` or `$MEWS_DIR/runner`, defaulting to
+ * `~/.mews/runner`. Matches `resolve_inbox_dir` in Rust `fetcher.rs`.
  */
 export function resolveRunnerHome(
   env: (name: string) => string | undefined = (n) => process.env[n],
 ): string {
-  const breezeHome = env("BREEZE_HOME");
-  if (breezeHome && breezeHome.length > 0) return breezeHome;
-  const breezeDir = env("BREEZE_DIR");
-  if (breezeDir && breezeDir.length > 0) return join(breezeDir, "runner");
-  return join(homedir(), ".breeze", "runner");
+  const mewsHome = env("MEWS_HOME");
+  if (mewsHome && mewsHome.length > 0) return mewsHome;
+  const mewsDir = env("MEWS_DIR");
+  if (mewsDir && mewsDir.length > 0) return join(mewsDir, "runner");
+  return join(homedir(), ".mews", "runner");
 }
 
 function logCandidateOutcome(
@@ -712,7 +712,7 @@ function logCandidateOutcome(
  */
 async function runPollerOnce(
   config: DaemonConfig,
-  paths: BreezePaths,
+  paths: MewsPaths,
   signal: AbortSignal,
   logger: PollerLogger,
 ): Promise<void> {
@@ -726,7 +726,7 @@ async function runPollerOnce(
     });
     for (const warning of outcome.warnings) logger.warn(warning);
     logger.info(
-      `breeze: polled ${outcome.total} notifications (${outcome.newCount} new)`,
+      `mews: polled ${outcome.total} notifications (${outcome.newCount} new)`,
     );
   } catch (err) {
     logger.warn(

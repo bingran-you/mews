@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>breeze</title>
+<title>mews</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root {
@@ -68,7 +68,7 @@
 </head>
 <body>
 <header>
-  <h1>breeze</h1>
+  <h1>mews</h1>
   <span class="meta" id="last-poll">loading…</span>
   <span class="status-pill" id="sse-status">connecting</span>
 </header>
@@ -117,7 +117,7 @@
 
     const buckets = { new: 0, human: 0, wip: 0, done: 0 };
     for (const n of data.notifications) {
-      buckets[n.breeze_status] = (buckets[n.breeze_status] || 0) + 1;
+      buckets[n.mews_status] = (buckets[n.mews_status] || 0) + 1;
     }
     document.getElementById("counts").innerHTML = ["new","human","wip","done"]
       .map(k => `<span class="count-chip ${k}"><b>${buckets[k] || 0}</b>${k}</span>`)
@@ -125,13 +125,13 @@
 
     const q = state.query.toLowerCase();
     const rows = data.notifications
-      .filter(n => state.filter === "all" || n.breeze_status === state.filter)
+      .filter(n => state.filter === "all" || n.mews_status === state.filter)
       .filter(n => !q || (n.repo || "").toLowerCase().includes(q) || (n.title || "").toLowerCase().includes(q))
       .map(n => {
-        const labels = (n.labels || []).filter(l => !l.startsWith("breeze:"))
+        const labels = (n.labels || []).filter(l => !l.startsWith("mews:"))
           .map(l => `<span class="label-chip">${escape(l)}</span>`).join("");
         return `<tr>
-          <td><span class="badge ${n.breeze_status}">${n.breeze_status}</span></td>
+          <td><span class="badge ${n.mews_status}">${n.mews_status}</span></td>
           <td>${escape(n.type)}</td>
           <td class="repo">${escape(n.repo)}</td>
           <td><a href="${escape(n.html_url)}" target="_blank" rel="noopener">${escape(n.title)}</a></td>

@@ -1,5 +1,5 @@
 /**
- * Phase 3c: cross-process `gh` broker for the TypeScript breeze daemon.
+ * Phase 3c: cross-process `gh` broker for the TypeScript mews daemon.
  *
  * Port of `broker.rs`.
  *
@@ -73,7 +73,7 @@ export const MUTATION_CACHE_TTL_MS = 15 * 60 * 1_000;
 export const SHIM_SCRIPT = `#!/bin/sh
 set -eu
 
-broker_dir="\${BREEZE_BROKER_DIR:?missing BREEZE_BROKER_DIR}"
+broker_dir="\${MEWS_BROKER_DIR:?missing MEWS_BROKER_DIR}"
 requests_dir="$broker_dir/requests"
 mkdir -p "$requests_dir"
 
@@ -87,7 +87,7 @@ for arg in "$@"; do
   case "$arg" in
     *'
 '*)
-      echo "breeze-runner gh shim does not support newline arguments" >&2
+      echo "mews-runner gh shim does not support newline arguments" >&2
       exit 2
       ;;
   esac
@@ -102,11 +102,11 @@ if [ -n "\${GH_REPO:-}" ]; then
   printf '%s' "$GH_REPO" > "$request_dir/gh_repo.txt"
 fi
 
-timeout_secs="\${BREEZE_BROKER_TIMEOUT_SECS:-1800}"
+timeout_secs="\${MEWS_BROKER_TIMEOUT_SECS:-1800}"
 deadline=$(( $(date +%s) + timeout_secs ))
 while [ ! -f "$request_dir/response.env" ]; do
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "breeze-runner gh shim timed out waiting for broker" >&2
+    echo "mews-runner gh shim timed out waiting for broker" >&2
     exit 124
   fi
   sleep 0.1
@@ -145,7 +145,7 @@ export interface GhBrokerOptions {
 export interface RunningBroker {
   /** Directory containing `bin/gh` shim. Set on agent `PATH`. */
   shimDir: string;
-  /** `BREEZE_BROKER_DIR` passed to the agent. */
+  /** `MEWS_BROKER_DIR` passed to the agent. */
   brokerDir: string;
   /** Stop the serve loop and wait for in-flight requests to finish. */
   stop(): Promise<void>;

@@ -1,9 +1,9 @@
 /**
- * Filesystem layout for the shared `~/.breeze/` store.
+ * Filesystem layout for the shared `~/.mews/` store.
  *
- * Mirrors `resolve_inbox_dir` (`fetcher.rs:652-657`): honors `$BREEZE_DIR`,
- * otherwise falls back to `$HOME/.breeze`. The runner home is separately
- * `$BREEZE_HOME`, defaulting to `$BREEZE_DIR/runner` — Phase 2a does not
+ * Mirrors `resolve_inbox_dir` (`fetcher.rs:652-657`): honors `$MEWS_DIR`,
+ * otherwise falls back to `$HOME/.mews`. The runner home is separately
+ * `$MEWS_HOME`, defaulting to `$MEWS_DIR/runner` — Phase 2a does not
  * touch the runner-private tree, so those paths are intentionally absent
  * from this module.
  */
@@ -11,15 +11,15 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export interface BreezePathsDeps {
+export interface MewsPathsDeps {
   /** Read an env var; pass `() => undefined` to force defaults. */
   env?: (name: string) => string | undefined;
   /** Home-directory override; defaults to `os.homedir()`. */
   homeDir?: () => string;
 }
 
-export interface BreezePaths {
-  /** The shared breeze directory (`$BREEZE_DIR` or `$HOME/.breeze`). */
+export interface MewsPaths {
+  /** The shared mews directory (`$MEWS_DIR` or `$HOME/.mews`). */
   root: string;
   /** `inbox.json` path. */
   inbox: string;
@@ -33,15 +33,15 @@ export interface BreezePaths {
   inboxLock: string;
 }
 
-export const BREEZE_DIR_ENV = "BREEZE_DIR";
+export const MEWS_DIR_ENV = "MEWS_DIR";
 
-/** Resolve the shared `~/.breeze/` layout. */
-export function resolveBreezePaths(deps: BreezePathsDeps = {}): BreezePaths {
+/** Resolve the shared `~/.mews/` layout. */
+export function resolveMewsPaths(deps: MewsPathsDeps = {}): MewsPaths {
   const env = deps.env ?? ((name) => process.env[name]);
   const homeDir = deps.homeDir ?? homedir;
 
-  const override = env(BREEZE_DIR_ENV);
-  const root = override && override.length > 0 ? override : join(homeDir(), ".breeze");
+  const override = env(MEWS_DIR_ENV);
+  const root = override && override.length > 0 ? override : join(homeDir(), ".mews");
 
   return {
     root,

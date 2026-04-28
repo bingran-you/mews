@@ -1,5 +1,5 @@
 /**
- * TS port of `breeze-status-manager`.
+ * TS port of `mews-status-manager`.
  *
  * Surface mirrors the bash script exactly — same stdout, stderr, and
  * exit codes for every documented usage. Differences versus bash are
@@ -8,7 +8,7 @@
  * swallowed inside `GhClient` helpers to preserve the silent
  * "non-labeler fallback" from spec doc 3 §8).
  *
- * Usage (identical to `bash bin/breeze-status-manager`):
+ * Usage (identical to `bash bin/mews-status-manager`):
  *   get <notification-id>
  *   set <notification-id> <status> [--by <session-id>] [--reason <text>]
  *   claim <notification-id> <session-id> [--action <text>]
@@ -31,21 +31,21 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { loadBreezeConfig } from "../runtime/config.js";
+import { loadMewsConfig } from "../runtime/config.js";
 import { GhClient } from "../runtime/gh.js";
-import { resolveBreezePaths } from "../runtime/paths.js";
+import { resolveMewsPaths } from "../runtime/paths.js";
 import { appendActivityEvent } from "../runtime/activity-log.js";
 import { readInbox, updateInbox } from "../runtime/store.js";
 import {
-  type BreezeStatus,
-  BREEZE_LABEL_META,
-  ALL_BREEZE_LABELS,
+  type MewsStatus,
+  MEWS_LABEL_META,
+  ALL_MEWS_LABELS,
   type Inbox,
   type InboxEntry,
 } from "../runtime/types.js";
 
-// Re-export of the `BreezeStatus` enum for CLI-arg validation.
-const BREEZE_STATUSES = ["new", "wip", "human", "done"] as const;
+// Re-export of the `MewsStatus` enum for CLI-arg validation.
+const MEWS_STATUSES = ["new", "wip", "human", "done"] as const;
 
 export interface StatusManagerIO {
   stdout: (line: string) => void;
@@ -56,7 +56,7 @@ export interface StatusManagerDeps {
   io?: StatusManagerIO;
   gh?: GhClient;
   /** Override paths (mainly for tests). */
-  paths?: ReturnType<typeof resolveBreezePaths>;
+  paths?: ReturnType<typeof resolveMewsPaths>;
   /** Override current time for tests. */
   now?: () => Date;
   /** Claim timeout in seconds; default 300. */
@@ -100,10 +100,10 @@ function parseFlagTail(
 }
 
 function printHelp(io: StatusManagerIO): void {
-  io.stdout("Usage: breeze-status-manager <command> [args]");
+  io.stdout("Usage: mews-status-manager <command> [args]");
   io.stdout("");
   io.stdout("Commands:");
-  io.stdout("  get <id>                    Get breeze status for a notification");
+  io.stdout("  get <id>                    Get mews status for a notification");
   io.stdout(
     "  set <id> <status>           Set status (new, wip, human, done) via GitHub labels",
   );
@@ -118,7 +118,7 @@ function printHelp(io: StatusManagerIO): void {
     "  count [--status <status>]   Count notifications by status",
   );
   io.stdout(
-    "  ensure-labels <repo>        Create breeze:* labels on a repo",
+    "  ensure-labels <repo>        Create mews:* labels on a repo",
   );
 }
 
@@ -129,7 +129,7 @@ function readLine(path: string): string {
 }
 
 function parseIsoUtc(s: string): number | null {
-  // Accept the exact format `bin/breeze-status-manager` writes
+  // Accept the exact format `bin/mews-status-manager` writes
   // (`YYYY-MM-DDTHH:MM:SSZ`). Return unix ms, or null on parse failure.
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/u.exec(s);
   if (!m) {
@@ -158,7 +158,7 @@ async function cmdGet(
     io.stderr("ERROR: missing notification id");
     return 1;
   }
-  const paths = deps.paths ?? resolveBreezePaths();
+  const paths = deps.paths ?? resolveMewsPaths();
   const now = deps.now ?? (() => new Date());
   const claimTimeoutSecs = deps.claimTimeoutSecs ?? 300;
 
@@ -178,7 +178,7 @@ async function cmdGet(
 
   const inbox = readInbox(paths.inbox);
   const entry = findEntry(inbox, id);
-  io.stdout(entry?.breeze_status ?? "new");
+  io.stdout(entry?.mews_status ?? "new");
   return 0;
 }
 
@@ -189,12 +189,12 @@ async function cmdSet(
 ): Promise<number> {
   const { io } = deps;
   const id = args[0];
-  const status = args[1] as BreezeStatus | undefined;
+  const status = args[1] as MewsStatus | undefined;
   if (!id || !status) {
     io.stderr("ERROR: missing notification id or status");
     return 1;
   }
-  if (!BREEZE_STATUSES.includes(status)) {
+  if (!MEWS_STATUSES.includes(status)) {
     io.stderr(
       `ERROR: unknown status '${status}'. Use: new, wip, human, done`,
     );
@@ -204,7 +204,7 @@ async function cmdSet(
   const by = flags.by ?? "";
   const reason = flags.reason ?? "";
 
-  const paths = deps.paths ?? resolveBreezePaths();
+  const paths = deps.paths ?? resolveMewsPaths();
   if (!existsSync(paths.root)) mkdirSync(paths.root, { recursive: true });
   if (!existsSync(paths.claimsDir)) {
     mkdirSync(paths.claimsDir, { recursive: true });
@@ -218,22 +218,22 @@ async function cmdSet(
   }
 
   // Old status snapshot BEFORE we rewrite the local inbox copy.
-  const oldStatus: BreezeStatus = entry.breeze_status;
+  const oldStatus: MewsStatus = entry.mews_status;
 
   const gh = deps.gh ?? new GhClient();
   const repo = entry.repo;
   const num = entry.number;
 
-  // Step 1 (spec doc 3 §3.2): always remove every breeze:* label first.
-  for (const lbl of ALL_BREEZE_LABELS) {
+  // Step 1 (spec doc 3 §3.2): always remove every mews:* label first.
+  for (const lbl of ALL_MEWS_LABELS) {
     gh.removeLabel(repo, num, lbl);
   }
 
   // Step 2 (spec doc 3 §3.3): add the appropriate label for the new status.
-  // For "new" no label is added — absence of breeze:* labels IS "new".
+  // For "new" no label is added — absence of mews:* labels IS "new".
   if (status === "wip" || status === "human" || status === "done") {
-    const label = `breeze:${status}` as const;
-    const meta = BREEZE_LABEL_META[label];
+    const label = `mews:${status}` as const;
+    const meta = MEWS_LABEL_META[label];
     gh.addLabelWithFallback(repo, num, label, meta.color, meta.description);
   }
 
@@ -250,7 +250,7 @@ async function cmdSet(
       return {
         ...current,
         notifications: current.notifications.map((n) =>
-          n.id === id ? { ...n, breeze_status: status } : n,
+          n.id === id ? { ...n, mews_status: status } : n,
         ),
       };
     },
@@ -295,7 +295,7 @@ async function cmdClaim(
   // anything remaining is the action. Explicit positional only.
   const action = args[2] && !args[2].startsWith("--") ? args[2] : "working";
 
-  const paths = deps.paths ?? resolveBreezePaths();
+  const paths = deps.paths ?? resolveMewsPaths();
   if (!existsSync(paths.claimsDir)) {
     mkdirSync(paths.claimsDir, { recursive: true });
   }
@@ -376,7 +376,7 @@ async function cmdRelease(
     io.stderr("ERROR: missing notification id");
     return 1;
   }
-  const paths = deps.paths ?? resolveBreezePaths();
+  const paths = deps.paths ?? resolveMewsPaths();
   rmSync(join(paths.claimsDir, id), { recursive: true, force: true });
   io.stdout("released");
   return 0;
@@ -389,12 +389,12 @@ async function cmdList(
 ): Promise<number> {
   const { io } = deps;
   const flags = parseFlagTail(args, ["status"]);
-  const filterStatus = (flags.status as BreezeStatus | undefined) ?? "new";
-  const paths = deps.paths ?? resolveBreezePaths();
+  const filterStatus = (flags.status as MewsStatus | undefined) ?? "new";
+  const paths = deps.paths ?? resolveMewsPaths();
   const inbox = readInbox(paths.inbox);
   if (!inbox) return 0;
   for (const entry of inbox.notifications) {
-    if (entry.breeze_status === filterStatus) {
+    if (entry.mews_status === filterStatus) {
       io.stdout(entry.id);
     }
   }
@@ -408,12 +408,12 @@ async function cmdCount(
 ): Promise<number> {
   const { io } = deps;
   const flags = parseFlagTail(args, ["status"]);
-  const filterStatus = (flags.status as BreezeStatus | undefined) ?? "new";
-  const paths = deps.paths ?? resolveBreezePaths();
+  const filterStatus = (flags.status as MewsStatus | undefined) ?? "new";
+  const paths = deps.paths ?? resolveMewsPaths();
   const inbox = readInbox(paths.inbox);
   const count = !inbox
     ? 0
-    : inbox.notifications.filter((n) => n.breeze_status === filterStatus).length;
+    : inbox.notifications.filter((n) => n.mews_status === filterStatus).length;
   io.stdout(String(count));
   return 0;
 }
@@ -430,9 +430,9 @@ async function cmdEnsureLabels(
     return 1;
   }
   const gh = deps.gh ?? new GhClient();
-  io.stdout(`Creating breeze labels on ${repo}...`);
-  for (const label of ALL_BREEZE_LABELS) {
-    const meta = BREEZE_LABEL_META[label];
+  io.stdout(`Creating mews labels on ${repo}...`);
+  for (const label of ALL_MEWS_LABELS) {
+    const meta = MEWS_LABEL_META[label];
     gh.createLabel(repo, label, meta.color, meta.description);
   }
   io.stdout(`Labels created on ${repo}`);
@@ -440,7 +440,7 @@ async function cmdEnsureLabels(
 }
 
 /**
- * Entry point. `argv` is the argv *without* the leading `breeze` or
+ * Entry point. `argv` is the argv *without* the leading `mews` or
  * `status-manager` tokens — i.e. what comes after them.
  */
 export async function runStatusManager(
@@ -452,7 +452,7 @@ export async function runStatusManager(
   // Touch config loader so CLI-vs-env overrides are validated early; kept
   // in scope so Phase 2b can pass config through. No-op side-effect for
   // Phase 2a.
-  loadBreezeConfig();
+  loadMewsConfig();
 
   const [cmd = "help", ...rest] = argv;
   switch (cmd) {

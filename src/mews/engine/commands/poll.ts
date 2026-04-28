@@ -1,9 +1,9 @@
 /**
- * TS port of `breeze-poll`.
+ * TS port of `mews-poll`.
  *
  * One-shot poll of GitHub notifications. Fetches the user's notifications
  * via `gh api`, enriches each PR/Issue with labels + state via a batched
- * GraphQL query, classifies into `breeze_status`, then writes `inbox.json`
+ * GraphQL query, classifies into `mews_status`, then writes `inbox.json`
  * and appends `new` / `transition` events to `activity.log`.
  *
  * Reuses the shared core modules:
@@ -11,7 +11,7 @@
  *   - `runtime/classifier.ts`: label → status derivation
  *   - `runtime/store.ts`     : atomic inbox writer under advisory lock
  *   - `runtime/activity-log.ts`: append-only JSONL writer
- *   - `runtime/paths.ts`     : `$BREEZE_DIR` layout
+ *   - `runtime/paths.ts`     : `$MEWS_DIR` layout
  *
  * Spec references:
  *   - the inbox/activity-log schema (historical migration doc, now removed; see git history) §1 (inbox) and §2 (activity)
@@ -36,12 +36,12 @@ import {
 import { join } from "node:path";
 
 import { appendActivityEvent } from "../runtime/activity-log.js";
-import { classifyBreezeStatus } from "../runtime/classifier.js";
-import { loadBreezeConfig } from "../runtime/config.js";
+import { classifyMewsStatus } from "../runtime/classifier.js";
+import { loadMewsConfig } from "../runtime/config.js";
 import { GhClient, GhExecError } from "../runtime/gh.js";
-import { resolveBreezePaths } from "../runtime/paths.js";
+import { resolveMewsPaths } from "../runtime/paths.js";
 import { updateInbox } from "../runtime/store.js";
-import { shouldProcessReason } from "../runtime/task-kind.js";
+import { shouldTrackReason } from "../runtime/task-kind.js";
 import {
   type GhState,
   type Inbox,
@@ -56,10 +56,10 @@ export interface PollIO {
 export interface PollDeps {
   io?: PollIO;
   gh?: GhClient;
-  paths?: ReturnType<typeof resolveBreezePaths>;
+  paths?: ReturnType<typeof resolveMewsPaths>;
   now?: () => Date;
   appendActivity?: typeof appendActivityEvent;
-  /** `claimTimeoutSecs` override; default from loadBreezeConfig. */
+  /** `claimTimeoutSecs` override; default from loadMewsConfig. */
   claimTimeoutSecs?: number;
 }
 
@@ -161,7 +161,7 @@ export function parseNotifications(
       const repo = item.repository?.full_name ?? "";
       if (!repo) continue;
       const reason = item.reason ?? "";
-      if (!shouldProcessReason(reason)) continue;
+      if (!shouldTrackReason(reason)) continue;
       const title = item.subject?.title ?? "";
       const url = item.subject?.url ?? "";
       const lastActor = item.subject?.latest_comment_url ?? url ?? "";
@@ -186,7 +186,7 @@ export function parseNotifications(
         html_url: htmlUrl,
         gh_state: null,
         labels: [],
-        breeze_status: "new",
+        mews_status: "new",
       });
     }
   }
@@ -352,10 +352,10 @@ export function enrichWithLabels(
   return warnings.length > 0 ? warnings.join("; ") : null;
 }
 
-/** Derive `breeze_status` for every entry in place (classifier is pure). */
+/** Derive `mews_status` for every entry in place (classifier is pure). */
 export function classifyEntries(entries: InboxEntry[]): void {
   for (const entry of entries) {
-    entry.breeze_status = classifyBreezeStatus({
+    entry.mews_status = classifyMewsStatus({
       labels: entry.labels,
       ghState: entry.gh_state,
     });
@@ -365,8 +365,8 @@ export function classifyEntries(entries: InboxEntry[]): void {
 interface DiffEvent {
   kind: "new" | "transition";
   entry: InboxEntry;
-  from?: InboxEntry["breeze_status"];
-  to?: InboxEntry["breeze_status"];
+  from?: InboxEntry["mews_status"];
+  to?: InboxEntry["mews_status"];
 }
 
 /**
@@ -374,17 +374,17 @@ interface DiffEvent {
  *
  * Mirrors `diff_and_log` (`fetcher.rs:539-581`):
  *   - `new` event when an id wasn't previously seen
- *   - `transition` event when `breeze_status` changed, EXCEPT
+ *   - `transition` event when `mews_status` changed, EXCEPT
  *     `new → done` (auto-close/merge noise; spec 3 §8)
  */
 export function diffEvents(
   old: Inbox | null,
   next: readonly InboxEntry[],
 ): DiffEvent[] {
-  const prevStatuses = new Map<string, InboxEntry["breeze_status"]>();
+  const prevStatuses = new Map<string, InboxEntry["mews_status"]>();
   if (old) {
     for (const entry of old.notifications) {
-      prevStatuses.set(entry.id, entry.breeze_status);
+      prevStatuses.set(entry.id, entry.mews_status);
     }
   }
   const events: DiffEvent[] = [];
@@ -394,13 +394,13 @@ export function diffEvents(
       events.push({ kind: "new", entry });
       continue;
     }
-    if (prev === entry.breeze_status) continue;
-    if (prev === "new" && entry.breeze_status === "done") continue;
+    if (prev === entry.mews_status) continue;
+    if (prev === "new" && entry.mews_status === "done") continue;
     events.push({
       kind: "transition",
       entry,
       from: prev,
-      to: entry.breeze_status,
+      to: entry.mews_status,
     });
   }
   return events;
@@ -504,7 +504,7 @@ export function splitConcatenatedJsonArrays(raw: string): string[] {
 }
 
 /**
- * Entry point for `first-tree breeze poll`.
+ * Entry point for `mews poll`.
  *
  * Exit codes:
  *   - 0 on successful poll (even if GitHub API degraded — we keep the
@@ -518,18 +518,18 @@ export async function runPoll(
 ): Promise<number> {
   if (argv[0] === "--help" || argv[0] === "-h" || argv[0] === "help") {
     const io = deps.io ?? DEFAULT_IO;
-    io.stdout("Usage: breeze poll");
+    io.stdout("Usage: mews poll");
     io.stdout("");
     io.stdout("Run a single notifications poll: fetch, enrich, classify,");
     io.stdout("then write inbox.json + append activity.log events.");
     io.stdout("");
-    io.stdout("Honors $BREEZE_DIR (default ~/.breeze).");
+    io.stdout("Honors $MEWS_DIR (default ~/.mews).");
     return 0;
   }
 
   const io = deps.io ?? DEFAULT_IO;
-  const config = loadBreezeConfig();
-  const paths = deps.paths ?? resolveBreezePaths();
+  const config = loadMewsConfig();
+  const paths = deps.paths ?? resolveMewsPaths();
   const gh = deps.gh ?? new GhClient();
   const now = deps.now ?? (() => new Date());
   const append = deps.appendActivity ?? appendActivityEvent;
@@ -623,9 +623,9 @@ export async function runPoll(
   cleanupExpiredClaims(paths.claimsDir, claimTimeoutSecs, now);
 
   const total = entries.length;
-  const newCount = entries.filter((e) => e.breeze_status === "new").length;
+  const newCount = entries.filter((e) => e.mews_status === "new").length;
   const timeOnly = pollTs.slice(11, 19);
-  io.stdout(`breeze: polled ${timeOnly} — ${total} notifications (${newCount} new)`);
+  io.stdout(`mews: polled ${timeOnly} — ${total} notifications (${newCount} new)`);
   return 0;
 }
 

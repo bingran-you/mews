@@ -3,7 +3,7 @@
  *
  * Port of `runner.rs`.
  *
- * Terminology: within breeze, the daemon (sometimes called "breeze-runner"
+ * Terminology: within mews, the daemon (sometimes called "mews-runner"
  * for historical reasons) owns a dispatcher which drives multiple
  * concurrent **agents**. An agent here is a single CLI backend binding
  * (`codex` or `claude`); the dispatcher picks from an AgentPool and may
@@ -141,7 +141,7 @@ export async function executeAgent(
   }
 
   // Claude doesn't emit --output-last-message; copy stdout into
-  // runner-output.txt so parse_result can find the final BREEZE_RESULT
+  // runner-output.txt so parse_result can find the final MEWS_RESULT
   // line consistently.
   if (spec.kind === "claude") {
     const stdout = existsSync(stdoutPath)
@@ -170,10 +170,10 @@ export function buildPrompt(request: AgentRequest): string {
       ? `- Working repository: ${task.workspaceRepo}\n`
       : "";
   return (
-    `This is breeze and you are a team of agents representing ${request.identity.login}.\n` +
+    `This is mews and you are a team of agents representing ${request.identity.login}.\n` +
     `\n` +
-    `This is breeze's code repo:\n` +
-    `https://github.com/agent-team-foundation/breeze\n` +
+    `This is mews's code repo:\n` +
+    `https://github.com/bingran-you/mews\n` +
     `\n` +
     `Your job is addressing any comments / discussions / review request / task request / pull request etc. (basically any GitHub notifications) related to GitHub id: ${request.identity.login}. When reviewing pull requests, follow the principle here: https://google.github.io/eng-practices/review/\n` +
     `\n` +
@@ -197,35 +197,30 @@ export function buildPrompt(request: AgentRequest): string {
     `\n` +
     `Read the local snapshot files first. Only call \`gh\` when you need fresh data or to publish the final result.\n` +
     `\n` +
-    `Dispatch rule — gardener sync-proposal issues (REQUIRED CHECK):\n` +
-    `If the task Type is \`assigned_issue\` AND the issue body contains the marker \`<!-- gardener:sync-proposal\`, this is a Context Tree update request filed by \`first-tree gardener sync\`. Do NOT draft the tree change by hand. Instead, run:\n` +
-    `  first-tree gardener draft-node --issue <issue-number> --tree-repo <owner/repo>\n` +
-    `The CLI fetches the issue, parses the marker, copies the proposed NODE.md content onto a deterministic branch, and opens a tree PR for human review. Use \`--dry-run\` first if you want to preview the plan. After the CLI exits, its own BREEZE_RESULT line is the authoritative result — do not invent a new one; set the \`breeze:*\` label per the rule below and stop.\n` +
-    `\n` +
     `Status labeling rule (REQUIRED): label the issue / pull request with your current status using exactly one of:\n` +
-    `- \`breeze:wip\` — you are actively working on it\n` +
-    `- \`breeze:human\` — you need human input or judgment to proceed\n` +
-    `- \`breeze:done\` — you have finished handling it\n` +
+    `- \`mews:wip\` — you are actively working on it\n` +
+    `- \`mews:human\` — you need human input or judgment to proceed\n` +
+    `- \`mews:done\` — you have finished handling it\n` +
     `\n` +
     `Apply the label via \`gh\`, for example:\n` +
-    `  gh issue edit <number> --repo <owner>/<repo> --add-label "breeze:<status>"\n` +
-    `  gh pr edit   <number> --repo <owner>/<repo> --add-label "breeze:<status>"\n` +
-    `Remove any previous \`breeze:*\` label when the status changes so only one \`breeze:*\` label remains on the item. Set \`breeze:wip\` as soon as you start real work, and set \`breeze:done\` or \`breeze:human\` before you stop.\n` +
+    `  gh issue edit <number> --repo <owner>/<repo> --add-label "mews:<status>"\n` +
+    `  gh pr edit   <number> --repo <owner>/<repo> --add-label "mews:<status>"\n` +
+    `Remove any previous \`mews:*\` label when the status changes so only one \`mews:*\` label remains on the item. Set \`mews:wip\` as soon as you start real work, and set \`mews:done\` or \`mews:human\` before you stop.\n` +
     `\n` +
     `If you post a public GitHub reply, review, or comment, include this exact disclosure sentence once: ${request.disclosureText}\n` +
     `\n` +
     `When you are done, finish with exactly one line in this format:\n` +
-    `BREEZE_RESULT: status=<handled|skipped|failed> summary=<one-line summary>`
+    `MEWS_RESULT: status=<handled|skipped|failed> summary=<one-line summary>`
   );
 }
 
 /**
- * Scan bottom-up for the last `BREEZE_RESULT:` line. Mirrors Rust
+ * Scan bottom-up for the last `MEWS_RESULT:` line. Mirrors Rust
  * `parse_result`. If missing, default to `handled` with the last line
  * of output as the summary.
  *
  * Phase 3c bug-fix note (spec doc 4 §11): Rust silently treats
- * crashes-without-BREEZE_RESULT as `handled`. The dispatcher layer can
+ * crashes-without-MEWS_RESULT as `handled`. The dispatcher layer can
  * re-classify these by inspecting exit status; this function preserves
  * the Rust default for parity.
  */
@@ -236,8 +231,8 @@ export function parseResult(output: string): {
   const lines = output.split(/\r?\n/);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const trimmed = lines[i].trim();
-    if (!trimmed.startsWith("BREEZE_RESULT:")) continue;
-    const payload = trimmed.slice("BREEZE_RESULT:".length).trim();
+    if (!trimmed.startsWith("MEWS_RESULT:")) continue;
+    const payload = trimmed.slice("MEWS_RESULT:".length).trim();
     const status =
       payload
         .split(/\s+/)
@@ -368,9 +363,9 @@ export function buildAgentEnv(
   return {
     ...process.env,
     PATH: `${request.ghShimDir}:${existingPath}`,
-    BREEZE_BROKER_DIR: request.ghBrokerDir,
-    BREEZE_SNAPSHOT_DIR: request.snapshotDir,
-    BREEZE_TASK_DIR: request.taskDir,
+    MEWS_BROKER_DIR: request.ghBrokerDir,
+    MEWS_SNAPSHOT_DIR: request.snapshotDir,
+    MEWS_TASK_DIR: request.taskDir,
   };
 }
 

@@ -1,23 +1,19 @@
 /**
- * Runtime config for breeze TS-port commands and the TS daemon backend.
+ * Runtime config for mews TS-port commands and the TS daemon backend.
  *
  * There are two config surfaces in this module:
  *
- * 1. `loadBreezeConfig` — the lightweight per-command knob bag used by
+ * 1. `loadMewsConfig` — the lightweight per-command knob bag used by
  *    `status-manager` / `poll` / etc. (Phase 2a). Env-only today.
  *
- * 2. `loadBreezeDaemonConfig` — the daemon-level config introduced in
- *    Phase 3a. Reads `~/.first-tree/breeze/config.yaml` (or the older
- *    `~/.breeze/config.yaml`, for back-compat with any hand-written
- *    files), merges with env vars and CLI overrides, and returns a
- *    validated `DaemonConfig`.
+ * 2. `loadMewsDaemonConfig` — the daemon-level config introduced in
+ *    Phase 3a. Reads `~/.mews/config.yaml`, merges with env vars and
+ *    CLI overrides, and returns a validated `DaemonConfig`.
  *
  * Priority (highest wins): CLI overrides > env vars > yaml > defaults.
  *
- * NOTE: the runtime data directory (`inbox.json`, `activity.log`, claim
- * locks) remains `~/.breeze/` for Phase 3 — only the *config* moves to
- * `~/.first-tree/breeze/`. This matches the scope constraint that
- * Phase 3a must not break format parity with the Rust daemon.
+ * NOTE: runtime data (`inbox.json`, `activity.log`, claim locks, and
+ * config.yaml`) all live under `~/.mews/`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -26,12 +22,12 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-export const CLAIM_TIMEOUT_SECS = 300; // 5 minutes; matches bin/breeze-status-manager:29
+export const CLAIM_TIMEOUT_SECS = 300; // 5 minutes; matches bin/mews-status-manager:29
 
-export interface BreezeConfig {
+export interface MewsConfig {
   /** GitHub API host, default "github.com". Mirrors runner `--host`. */
   host: string;
-  /** Identity cache TTL for `~/.breeze/identity.json`. */
+  /** Identity cache TTL for `~/.mews/identity.json`. */
   identityTtlMs: number;
   /** How long a claim directory lives before it can be overwritten. */
   claimTimeoutSecs: number;
@@ -42,10 +38,10 @@ export interface LoadConfigDeps {
 }
 
 /** Load the runtime config from env. Used by status-manager and friends. */
-export function loadBreezeConfig(deps: LoadConfigDeps = {}): BreezeConfig {
+export function loadMewsConfig(deps: LoadConfigDeps = {}): MewsConfig {
   const env = deps.env ?? ((name) => process.env[name]);
   return {
-    host: env("BREEZE_HOST") ?? env("GH_HOST") ?? "github.com",
+    host: env("MEWS_HOST") ?? env("GH_HOST") ?? "github.com",
     identityTtlMs: 24 * 60 * 60 * 1000,
     claimTimeoutSecs: CLAIM_TIMEOUT_SECS,
   };
@@ -70,13 +66,13 @@ export interface DaemonConfig {
    * Max concurrent agent tasks the dispatcher may run at once.
    * Formerly hardcoded to 2; bumped to 20 after a live smoke showed
    * the infra handles that comfortably. Tunable via
-   * `BREEZE_MAX_PARALLEL` or `max_parallel` in yaml.
+   * `MEWS_MAX_PARALLEL` or `max_parallel` in yaml.
    */
   maxParallel: number;
   /**
    * Per-poll cap on search-based candidates. Only the search path is
    * limited; the notifications path returns everything it sees.
-   * Tunable via `BREEZE_SEARCH_LIMIT` or `search_limit` in yaml.
+   * Tunable via `MEWS_SEARCH_LIMIT` or `search_limit` in yaml.
    */
   searchLimit: number;
 }
@@ -117,17 +113,12 @@ export interface LoadDaemonConfigDeps {
 }
 
 /**
- * Locations searched for `config.yaml`, in order. The new canonical
- * location is under `~/.first-tree/breeze/` — the older `~/.breeze/`
- * location is checked second for back-compat. First hit wins.
+ * Location searched for `config.yaml`.
  */
-export function breezeDaemonConfigSearchPaths(
+export function mewsDaemonConfigSearchPaths(
   homeDir: string = homedir(),
 ): string[] {
-  return [
-    join(homeDir, ".first-tree", "breeze", "config.yaml"),
-    join(homeDir, ".breeze", "config.yaml"),
-  ];
+  return [join(homeDir, ".mews", "config.yaml")];
 }
 
 interface RawYamlConfig {
@@ -181,19 +172,19 @@ function pickLogLevel(value: unknown): DaemonConfig["logLevel"] | undefined {
 /**
  * Load daemon config with priority: CLI overrides > env > yaml > defaults.
  *
- * Env vars honored (kept compatible with breeze-runner names):
- *   BREEZE_POLL_INTERVAL_SECS  / BREEZE_INBOX_POLL_INTERVAL_SECS
- *   BREEZE_HTTP_PORT
- *   BREEZE_LOG_LEVEL
- *   BREEZE_HOST / GH_HOST
- *   BREEZE_TASK_TIMEOUT_SECS
- *   BREEZE_MAX_PARALLEL
- *   BREEZE_SEARCH_LIMIT
+ * Env vars honored (kept compatible with mews-runner names):
+ *   MEWS_POLL_INTERVAL_SECS  / MEWS_INBOX_POLL_INTERVAL_SECS
+ *   MEWS_HTTP_PORT
+ *   MEWS_LOG_LEVEL
+ *   MEWS_HOST / GH_HOST
+ *   MEWS_TASK_TIMEOUT_SECS
+ *   MEWS_MAX_PARALLEL
+ *   MEWS_SEARCH_LIMIT
  *
  * The yaml schema accepts snake_case (preferred) or camelCase keys.
  * Unknown yaml keys are ignored (forward-compat).
  */
-export function loadBreezeDaemonConfig(
+export function loadMewsDaemonConfig(
   deps: LoadDaemonConfigDeps = {},
 ): DaemonConfig {
   const env = deps.env ?? ((name) => process.env[name]);
@@ -208,7 +199,7 @@ export function loadBreezeDaemonConfig(
   // 2. YAML overlay.
   const candidates = deps.configPath
     ? [deps.configPath]
-    : breezeDaemonConfigSearchPaths(homeDir());
+    : mewsDaemonConfigSearchPaths(homeDir());
   for (const path of candidates) {
     if (!fileExists(path)) continue;
     let raw: string;
@@ -222,7 +213,7 @@ export function loadBreezeDaemonConfig(
       parsed = parseYaml(raw);
     } catch (err) {
       throw new Error(
-        `failed to parse breeze daemon config at ${path}: ${err instanceof Error ? err.message : String(err)}`,
+        `failed to parse mews daemon config at ${path}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     if (parsed !== null && typeof parsed === "object") {
@@ -250,21 +241,21 @@ export function loadBreezeDaemonConfig(
 
   // 3. Env overlay.
   const envPoll = pickNumber(
-    env("BREEZE_POLL_INTERVAL_SECS"),
-    env("BREEZE_INBOX_POLL_INTERVAL_SECS"),
+    env("MEWS_POLL_INTERVAL_SECS"),
+    env("MEWS_INBOX_POLL_INTERVAL_SECS"),
   );
   if (envPoll !== undefined) config.pollIntervalSec = envPoll;
-  const envTaskTimeout = pickNumber(env("BREEZE_TASK_TIMEOUT_SECS"));
+  const envTaskTimeout = pickNumber(env("MEWS_TASK_TIMEOUT_SECS"));
   if (envTaskTimeout !== undefined) config.taskTimeoutSec = envTaskTimeout;
-  const envLogLevel = pickLogLevel(env("BREEZE_LOG_LEVEL"));
+  const envLogLevel = pickLogLevel(env("MEWS_LOG_LEVEL"));
   if (envLogLevel !== undefined) config.logLevel = envLogLevel;
-  const envPort = pickNumber(env("BREEZE_HTTP_PORT"));
+  const envPort = pickNumber(env("MEWS_HTTP_PORT"));
   if (envPort !== undefined && envPort < 65_536) config.httpPort = envPort;
-  const envHost = pickString(env("BREEZE_HOST"), env("GH_HOST"));
+  const envHost = pickString(env("MEWS_HOST"), env("GH_HOST"));
   if (envHost !== undefined) config.host = envHost;
-  const envMaxParallel = pickNumber(env("BREEZE_MAX_PARALLEL"));
+  const envMaxParallel = pickNumber(env("MEWS_MAX_PARALLEL"));
   if (envMaxParallel !== undefined) config.maxParallel = envMaxParallel;
-  const envSearchLimit = pickNumber(env("BREEZE_SEARCH_LIMIT"));
+  const envSearchLimit = pickNumber(env("MEWS_SEARCH_LIMIT"));
   if (envSearchLimit !== undefined) config.searchLimit = envSearchLimit;
 
   // 4. CLI overrides.

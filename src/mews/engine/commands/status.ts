@@ -2,10 +2,10 @@
  * TS port of `Service::status` in `service.rs:145-195`.
  *
  * Prints the current lock + runtime/status.env contents. Intended for
- * `first-tree breeze status`.
+ * `mews status`.
  */
 
-import { loadBreezeDaemonConfig } from "../runtime/config.js";
+import { loadMewsDaemonConfig } from "../runtime/config.js";
 import {
   findServiceLock,
   isLockStale,
@@ -39,7 +39,7 @@ export async function runStatus(
 ): Promise<number> {
   const write = options.write ?? ((line) => process.stdout.write(`${line}\n`));
   const home = options.runnerHome ?? parseHome(argv) ?? resolveRunnerHome();
-  const config = loadBreezeDaemonConfig();
+  const config = loadMewsDaemonConfig();
   const repoFilterArg = options.allowRepo ?? parseAllowRepoArg(argv);
   const filter =
     repoFilterArg && repoFilterArg.length > 0
@@ -63,7 +63,7 @@ export async function runStatus(
     "default",
   );
 
-  write("breeze-runner status");
+  write("mews-runner status");
   write(`identity: ${identityLabel}`);
   write(
     `allowed repos: ${formatAllowedRepos(filter, runtime.get("allowed_repos"))}`,

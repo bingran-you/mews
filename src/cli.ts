@@ -2,10 +2,10 @@
 
 import { pathToFileURL } from "node:url";
 
-import { runBreeze } from "./mews/cli.js";
+import { runMews } from "./mews/cli.js";
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<number> {
-  return runBreeze(args, (text) => console.log(text));
+  return runMews(args, (text) => console.log(text));
 }
 
 const isMain =
