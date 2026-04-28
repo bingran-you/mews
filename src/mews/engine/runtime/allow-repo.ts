@@ -4,7 +4,7 @@ export const REQUIRED_ALLOW_REPO_USAGE =
   "--allow-repo <owner/repo[,owner/*,...]>";
 
 export const REQUIRED_ALLOW_REPO_MESSAGE =
-  "missing required --allow-repo <owner/repo[,owner/*,...]>; breeze startup now requires an explicit repo scope to avoid scanning all notifications";
+  "missing required --allow-repo <owner/repo[,owner/*,...]>; mews startup now requires an explicit repo scope to avoid scanning all notifications";
 
 export function parseAllowRepoArg(argv: readonly string[]): string | undefined {
   for (let i = 0; i < argv.length; i += 1) {

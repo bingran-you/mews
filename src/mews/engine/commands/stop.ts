@@ -7,7 +7,7 @@
 
 import { spawnSync } from "node:child_process";
 
-import { loadBreezeDaemonConfig } from "../runtime/config.js";
+import { loadMewsDaemonConfig } from "../runtime/config.js";
 import { resolveDaemonIdentity } from "../daemon/identity.js";
 import {
   findServiceLock,
@@ -32,14 +32,14 @@ export async function runStop(
   const write = options.write ?? ((line) => process.stdout.write(`${line}\n`));
   const home = options.runnerHome ?? parseHome(argv) ?? resolveRunnerHome();
   const profile = options.profile ?? parseProfile(argv) ?? "default";
-  const config = loadBreezeDaemonConfig();
+  const config = loadMewsDaemonConfig();
 
   let identity;
   try {
     identity = resolveDaemonIdentity({ host: config.host });
   } catch (err) {
     write(
-      `breeze: could not resolve identity to stop the runner: ${err instanceof Error ? err.message : String(err)}`,
+      `mews: could not resolve identity to stop the runner: ${err instanceof Error ? err.message : String(err)}`,
     );
     return 1;
   }
@@ -51,7 +51,7 @@ export async function runStop(
   const locksDir = `${home}/locks`;
   const lock = findServiceLock(locksDir, identity, profile);
   if (!lock) {
-    write("breeze: no running breeze-runner for the active identity");
+    write("mews: no running mews-runner for the active identity");
     return 0;
   }
 
@@ -62,25 +62,25 @@ export async function runStop(
     } catch {
       /* ignore */
     }
-    write(`removed stale breeze-runner lock for pid ${lock.pid}`);
+    write(`removed stale mews-runner lock for pid ${lock.pid}`);
     return 0;
   }
 
   const code = killProcess(lock);
   if (code !== 0) {
-    write(`breeze: kill ${lock.pid} failed (exit ${code})`);
+    write(`mews: kill ${lock.pid} failed (exit ${code})`);
     return 1;
   }
   const stopped = await waitForStop(lock.pid);
   if (!stopped) {
-    write(`breeze: pid ${lock.pid} did not exit after SIGTERM; forcing stop`);
+    write(`mews: pid ${lock.pid} did not exit after SIGTERM; forcing stop`);
     const killCode = killProcess(lock, "-KILL");
     if (killCode !== 0) {
-      write(`breeze: kill -KILL ${lock.pid} failed (exit ${killCode})`);
+      write(`mews: kill -KILL ${lock.pid} failed (exit ${killCode})`);
       return 1;
     }
     if (!(await waitForStop(lock.pid, 1_000))) {
-      write(`breeze: pid ${lock.pid} is still alive after SIGKILL`);
+      write(`mews: pid ${lock.pid} is still alive after SIGKILL`);
       return 1;
     }
   }
@@ -90,7 +90,7 @@ export async function runStop(
   } catch {
     /* ignore */
   }
-  write(`stopped breeze-runner pid ${lock.pid}`);
+  write(`stopped mews-runner pid ${lock.pid}`);
   return 0;
 }
 

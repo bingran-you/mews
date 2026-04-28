@@ -1,9 +1,9 @@
 /**
  * Mews CLI dispatcher.
  *
- * As of Phase 8 every breeze subcommand runs on the TypeScript daemon.
+ * As of Phase 8 every mews subcommand runs on the TypeScript daemon.
  * `run` / `run-once` / `daemon` all route through `daemon/runner-skeleton.ts`;
- * the historical `breeze-runner` Rust binary and the `--backend=` flag
+ * the historical `mews-runner` Rust binary and the `--backend=` flag
  * have been retired.
  *
  * Lifecycle + diagnostic subcommands (Phase 6): `start`, `stop`,
@@ -18,10 +18,10 @@
 
 import { join } from "node:path";
 
-export const BREEZE_USAGE = `usage: mews <command>
+export const MEWS_USAGE = `usage: mews <command>
 
   Mews is the local GitHub notification daemon. It polls your allowed
-  repositories, keeps a local inbox under \`~/.breeze/\`, and dispatches
+  repositories, keeps a local inbox under \`~/.mews/\`, and dispatches
   work to per-task agent runners.
 
 Primary commands (start here):
@@ -49,22 +49,22 @@ Options:
   --help, -h            Show this help message
 
 Environment:
-  BREEZE_DIR            Override \`~/.breeze\` (store root)
-  BREEZE_HOME           Override \`~/.breeze/runner\` (daemon private state)
+  MEWS_DIR            Override \`~/.mews\` (store root)
+  MEWS_HOME           Override \`~/.mews/runner\` (daemon private state)
 
 Not shown above (hook/internal entry points — do not invoke directly):
   statusline            Claude Code statusline hook. Called by Claude Code via
-                        the separate \`dist/breeze-statusline.js\` bundle for
-                        sub-30 ms cold start. See the breeze skill for wiring.
-  status-manager        Internal helper used by breeze runners to manage per-
+                        the separate \`dist/mews-statusline.js\` bundle for
+                        sub-30 ms cold start. See the mews skill for wiring.
+  status-manager        Internal helper used by mews runners to manage per-
                         session status entries. No direct human/agent use.
   poll-inbox            Legacy alias for \`poll\`. Kept for existing scripts.
 `;
 
-const BREEZE_INLINE_HELP: Partial<Record<string, string>> = {
+const MEWS_INLINE_HELP: Partial<Record<string, string>> = {
   run: `usage: mews run [options]
 
-  Run the Breeze daemon in the foreground until stopped.
+  Run the Mews daemon in the foreground until stopped.
 
   Common options:
     --allow-repo <csv>           Required: restrict work to owner/repo or owner/* patterns
@@ -95,7 +95,7 @@ const BREEZE_INLINE_HELP: Partial<Record<string, string>> = {
 `,
   start: `usage: mews start [options]
 
-  Launch the Breeze daemon in the background.
+  Launch the Mews daemon in the background.
 
   Options:
     --home <path>                Override runner home
@@ -104,7 +104,7 @@ const BREEZE_INLINE_HELP: Partial<Record<string, string>> = {
 `,
   stop: `usage: mews stop [options]
 
-  Stop the background Breeze daemon for the active identity.
+  Stop the background Mews daemon for the active identity.
 
   Options:
     --home <path>                Override runner home
@@ -120,7 +120,7 @@ const BREEZE_INLINE_HELP: Partial<Record<string, string>> = {
 `,
   doctor: `usage: mews doctor [options]
 
-  Diagnose the local Breeze install and auth/runtime state.
+  Diagnose the local Mews install and auth/runtime state.
 
   Options:
     --home <path>                Override runner home
@@ -218,14 +218,14 @@ function isHelpInvocation(args: readonly string[]): boolean {
   return first === "--help" || first === "-h" || first === "help";
 }
 
-export async function runBreeze(
+export async function runMews(
   args: string[],
   output: Output = console.log,
 ): Promise<number> {
   const write = (text: string): void => output(text);
 
   if (args.length === 0 || isHelpInvocation(args)) {
-    write(BREEZE_USAGE);
+    write(MEWS_USAGE);
     return 0;
   }
 
@@ -234,12 +234,12 @@ export async function runBreeze(
   const target = DISPATCH[command];
 
   if (!target) {
-    write(`Unknown breeze command: ${command}`);
-    write(BREEZE_USAGE);
+    write(`Unknown mews command: ${command}`);
+    write(MEWS_USAGE);
     return 1;
   }
 
-  const inlineHelp = BREEZE_INLINE_HELP[command];
+  const inlineHelp = MEWS_INLINE_HELP[command];
   if (inlineHelp && isHelpInvocation(rest)) {
     write(inlineHelp);
     return 0;

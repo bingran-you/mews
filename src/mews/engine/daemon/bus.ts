@@ -1,11 +1,11 @@
 /**
- * Phase 3c: in-process event bus for the TypeScript breeze daemon.
+ * Phase 3c: in-process event bus for the TypeScript mews daemon.
  *
  * Port of `bus.rs`.
  *
  * SINGLE-WRITER RULE (spec doc 2 §1.3):
  * -------------------------------------
- * This module is **read-only** with respect to `~/.breeze/inbox.json`.
+ * This module is **read-only** with respect to `~/.mews/inbox.json`.
  * Only the poller (`daemon/poller.ts`) writes the inbox. The bus
  * multicasts events produced by the poller/broker; subscribers (http SSE
  * stream, the broker's own completion handler, future observers) only

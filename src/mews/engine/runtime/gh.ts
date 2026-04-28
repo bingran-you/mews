@@ -1,5 +1,5 @@
 /**
- * Thin wrapper around the `gh` CLI for breeze TS commands.
+ * Thin wrapper around the `gh` CLI for mews TS commands.
  *
  * Mirrors the behaviour the bash scripts rely on:
  *   - `gh api <path>` for raw REST/GraphQL calls
@@ -121,7 +121,7 @@ export class GhClient {
 
   /**
    * Add a label to a PR/issue, creating it first if the repo lacks it.
-   * Mirrors `add_breeze_label` in `bin/breeze-status-manager:106-112`.
+   * Mirrors the historical label helper in the shell prototype.
    * All errors are swallowed (silent "non-labeler fallback", spec doc 3 §8).
    */
   addLabelWithFallback(
@@ -169,7 +169,7 @@ export class GhClient {
   /**
    * Remove a single label. Errors are swallowed — `gh` returns non-zero
    * if the label isn't on the item, which is fine. Mirrors the per-label
-   * loop in `bin/breeze-status-manager:98-103`.
+   * loop in `bin/mews-status-manager:98-103`.
    */
   removeLabel(repo: string, number: number, label: string): void {
     this.run([

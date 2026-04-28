@@ -1,14 +1,11 @@
 /**
- * `first-tree breeze install` — first-run setup for the breeze daemon.
+ * `mews install` — first-run setup for the mews daemon.
  *
- * Creates `~/.breeze/config.yaml` with defaults (if absent) and hands
- * off daemon startup to `first-tree breeze start`.
+ * Creates `~/.mews/config.yaml` with defaults (if absent) and hands
+ * off daemon startup to `mews start`.
  *
- * The pre-Phase-9 bash installer also symlinked three standalone skills
- * into `~/.claude/skills`. That step is obsolete: the four first-tree
- * skills now install into the caller's repo via `first-tree tree init`
- * / `bind` / `upgrade` and do not require a separate machine-wide
- * symlink step.
+ * The standalone `mews` package does not install any editor/agent
+ * skills automatically. It only prepares the local daemon runtime.
  */
 
 import { spawnSync } from "node:child_process";
@@ -22,7 +19,7 @@ import {
   REQUIRED_ALLOW_REPO_USAGE,
 } from "../runtime/allow-repo.js";
 
-const DEFAULT_CONFIG = `# breeze configuration
+const DEFAULT_CONFIG = `# mews configuration
 poll_interval_sec: 60
 task_timeout_sec: 1800
 log_level: info
@@ -31,7 +28,7 @@ host: github.com
 `;
 
 export interface InstallDeps {
-  breezeDir?: string;
+  mewsDir?: string;
   write?: (text: string) => void;
   spawn?: typeof spawnSync;
   checkCommand?: (cmd: string) => boolean;
@@ -48,10 +45,10 @@ export function resolveSelfStartCommand(
   if (entrypoint && entrypoint.length > 0) {
     return {
       cmd: process.execPath,
-      args: [entrypoint, "breeze", "start"],
+      args: [entrypoint, "start"],
     };
   }
-  return { cmd: "first-tree", args: ["breeze", "start"] };
+  return { cmd: "mews", args: ["start"] };
 }
 
 function defaultCheckCommand(cmd: string): boolean {
@@ -72,19 +69,19 @@ export function runInstall(
   deps: InstallDeps = {},
 ): number {
   if (args.length > 0 && (args[0] === "--help" || args[0] === "-h")) {
-    (deps.write ?? console.log)(`usage: first-tree breeze install
+    (deps.write ?? console.log)(`usage: mews install
 
-  Bootstraps the local breeze daemon:
+  Bootstraps the local mews daemon:
 
     1. Checks for gh, jq, and gh auth status
-    2. Creates \`~/.breeze/config.yaml\` with defaults (if absent)
-    3. Starts the daemon via \`first-tree breeze start\`
+    2. Creates \`~/.mews/config.yaml\` with defaults (if absent)
+    3. Starts the daemon via \`mews start\`
 
   Required:
     ${REQUIRED_ALLOW_REPO_USAGE}   Explicit repo scope for the daemon startup
 
   Environment:
-    BREEZE_DIR            Override \`~/.breeze\` (store root)
+    MEWS_DIR            Override \`~/.mews\` (store root)
 `);
     return 0;
   }
@@ -93,8 +90,8 @@ export function runInstall(
   const checkCommand = deps.checkCommand ?? defaultCheckCommand;
   const checkGhAuth = deps.checkGhAuth ?? defaultCheckGhAuth;
   const spawn = deps.spawn ?? spawnSync;
-  const breezeDir =
-    deps.breezeDir ?? process.env.BREEZE_DIR ?? join(homedir(), ".breeze");
+  const mewsDir =
+    deps.mewsDir ?? process.env.MEWS_DIR ?? join(homedir(), ".mews");
   const startCommand = deps.startCommand ?? resolveSelfStartCommand();
   try {
     requireExplicitRepoFilter(parseAllowRepoArg(args));
@@ -105,7 +102,7 @@ export function runInstall(
     return 1;
   }
 
-  write("=== breeze setup ===");
+  write("=== mews setup ===");
   write("");
   write("Checking prerequisites...");
 
@@ -128,9 +125,9 @@ export function runInstall(
   write("  jq: OK");
   write("");
 
-  write(`Setting up ${breezeDir}...`);
-  mkdirSync(breezeDir, { recursive: true });
-  const configPath = join(breezeDir, "config.yaml");
+  write(`Setting up ${mewsDir}...`);
+  mkdirSync(mewsDir, { recursive: true });
+  const configPath = join(mewsDir, "config.yaml");
   if (existsSync(configPath)) {
     write(`  Config already exists at ${configPath}`);
   } else {
@@ -139,7 +136,7 @@ export function runInstall(
   }
   write("");
 
-  write("Starting the breeze daemon...");
+  write("Starting the mews daemon...");
   const result = spawn(startCommand.cmd, [...startCommand.args, ...args], {
     stdio: "inherit",
   });
@@ -147,17 +144,17 @@ export function runInstall(
     write("  Daemon started");
   } else {
     write(
-      "  WARN: daemon start failed; rerun `first-tree breeze start --allow-repo owner/repo` manually",
+      "  WARN: daemon start failed; rerun `mews start --allow-repo owner/repo` manually",
     );
   }
   write("");
 
-  write("=== breeze setup complete ===");
+  write("=== mews setup complete ===");
   write("");
   write("  Dashboard:  http://127.0.0.1:7878");
-  write("  Status:     first-tree breeze status");
-  write("  Stop:       first-tree breeze stop");
-  write("  Inspect:    first-tree breeze doctor");
+  write("  Status:     mews status");
+  write("  Stop:       mews stop");
+  write("  Inspect:    mews doctor");
 
   return 0;
 }

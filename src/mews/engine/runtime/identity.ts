@@ -3,7 +3,7 @@
  *
  * The Rust daemon's `resolve_identity` (`identity.rs`) uses `gh auth status`
  * + jq. For the TS port we use the simpler `gh api /user` and cache the
- * response to `~/.breeze/identity.json` with a 24h TTL. Phase 3 (daemon)
+ * response to `~/.mews/identity.json` with a 24h TTL. Phase 3 (daemon)
  * will decide whether to keep both paths or unify them.
  *
  * The cache file is read-only for most callers. Corrupt / stale cache is

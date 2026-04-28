@@ -1,10 +1,10 @@
 /**
- * Runtime-validated types for the shared breeze store.
+ * Runtime-validated types for the shared mews store.
  *
  * Authoritative spec: the inbox/activity-log schema (historical migration doc, now removed; see git history) and
  * the status state-machine spec (historical migration doc, now removed; see git history). These must round-trip
- * existing `~/.breeze/inbox.json` and `~/.breeze/activity.log` files
- * produced by the Rust `breeze-runner` and the legacy bash scripts.
+ * existing `~/.mews/inbox.json` and `~/.mews/activity.log` files
+ * produced by the Rust `mews-runner` and the legacy bash scripts.
  *
  * Field ordering and `null` (vs `undefined` / omitted) in inbox entries
  * is load-bearing — the Rust encoder always emits every key and uses
@@ -15,8 +15,8 @@
 import { z } from "zod";
 
 /** The four possible derived statuses for a notification. */
-export const BreezeStatusSchema = z.enum(["new", "wip", "human", "done"]);
-export type BreezeStatus = z.infer<typeof BreezeStatusSchema>;
+export const MewsStatusSchema = z.enum(["new", "wip", "human", "done"]);
+export type MewsStatus = z.infer<typeof MewsStatusSchema>;
 
 /** GitHub GraphQL `state` enum surfaced in the inbox payload. */
 export const GhStateSchema = z.enum(["OPEN", "CLOSED", "MERGED"]);
@@ -43,7 +43,7 @@ export const InboxEntrySchema = z.object({
   html_url: z.string(),
   gh_state: GhStateSchema.nullable(),
   labels: z.array(z.string()),
-  breeze_status: BreezeStatusSchema,
+  mews_status: MewsStatusSchema,
 });
 export type InboxEntry = z.infer<typeof InboxEntrySchema>;
 
@@ -60,9 +60,9 @@ export type Inbox = z.infer<typeof InboxSchema>;
  *
  * The four observed kinds in the wild:
  *   - `new` — fetcher: first-time notification
- *   - `transition` — fetcher or status-manager: breeze_status changed
+ *   - `transition` — fetcher or status-manager: mews_status changed
  *   - `claimed` — status-manager: claim directory acquired
- *   - `poll` — legacy `bin/breeze-poll`: count-of-new per cycle
+ *   - `poll` — legacy `bin/mews-poll`: count-of-new per cycle
  *
  * Each event has a small common header (`ts`, `event`, plus per-kind
  * payload). Extra keys are allowed for forward-compatibility but
@@ -86,8 +86,8 @@ export type NewEvent = z.infer<typeof NewEventSchema>;
 export const TransitionEventSchema = z.object({
   event: z.literal("transition"),
   ...CommonHeader,
-  from: BreezeStatusSchema,
-  to: BreezeStatusSchema,
+  from: MewsStatusSchema,
+  to: MewsStatusSchema,
   // Status-manager writes these extra fields; the Rust fetcher does not.
   by: z.string().optional(),
   reason: z.string().optional(),
@@ -129,23 +129,23 @@ export type Claim = z.infer<typeof ClaimSchema>;
  * Label color/description metadata enforced by `ensure-labels` on a repo.
  * Spec doc 3 §7.
  */
-export const BREEZE_LABEL_META = {
-  "breeze:new": { color: "0075ca", description: "Breeze: new notification" },
-  "breeze:wip": { color: "e4e669", description: "Breeze: work in progress" },
-  "breeze:human": {
+export const MEWS_LABEL_META = {
+  "mews:new": { color: "0075ca", description: "Mews: new notification" },
+  "mews:wip": { color: "e4e669", description: "Mews: work in progress" },
+  "mews:human": {
     color: "d93f0b",
-    description: "Breeze: needs human attention",
+    description: "Mews: needs human attention",
   },
-  "breeze:done": { color: "0e8a16", description: "Breeze: handled" },
+  "mews:done": { color: "0e8a16", description: "Mews: handled" },
 } as const satisfies Record<
   string,
   { color: string; description: string }
 >;
 
-export const ALL_BREEZE_LABELS = [
-  "breeze:new",
-  "breeze:wip",
-  "breeze:human",
-  "breeze:done",
+export const ALL_MEWS_LABELS = [
+  "mews:new",
+  "mews:wip",
+  "mews:human",
+  "mews:done",
 ] as const;
-export type BreezeLabel = (typeof ALL_BREEZE_LABELS)[number];
+export type MewsLabel = (typeof ALL_MEWS_LABELS)[number];

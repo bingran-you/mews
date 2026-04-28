@@ -2,9 +2,10 @@
  * TS port of `classify.rs`.
  *
  * `TaskKind` classifies a GitHub notification subject + reason into the
- * breeze task taxonomy. `priority_for` returns the dispatcher priority;
- * `should_process_reason` gates which notification reasons the daemon and
- * inbox treat as actionable.
+ * mews task taxonomy. `priority_for` returns the dispatcher priority;
+ * `shouldTrackReason` gates which notification reasons are visible in the
+ * inbox, while `shouldProcessReason` decides which ones the daemon may
+ * auto-dispatch to local agents.
  *
  * Pure. No I/O. Safe to import from anywhere.
  */
@@ -35,16 +36,29 @@ export function taskKindFromString(value: string): TaskKind | undefined {
 }
 
 /**
- * Whitelist of explicit GitHub signals that merit dispatch. Breeze only
- * acts on direct review requests and direct mentions; other participation
- * reasons (author, assign, comment, manual, etc.) stay visible on GitHub
- * itself but are not treated as breeze work items.
+ * Reasons mews should keep visible in the inbox/dashboard. We track the
+ * common user-facing GitHub notification reasons and ignore empty/CI-only
+ * noise.
+ */
+export function shouldTrackReason(reason: string): boolean {
+  if (reason.trim().length === 0) return false;
+  return reason !== "ci_activity";
+}
+
+/**
+ * Reasons the daemon may auto-dispatch. This is intentionally narrower
+ * than `shouldTrackReason`: the dashboard shows more than the agent loop
+ * should immediately act on.
  */
 export function shouldProcessReason(reason: string): boolean {
   switch (reason) {
     case "review_requested":
     case "mention":
     case "team_mention":
+    case "comment":
+    case "author":
+    case "manual":
+    case "assign":
       return true;
     default:
       return false;

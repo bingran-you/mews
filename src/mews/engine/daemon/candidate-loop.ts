@@ -2,7 +2,7 @@
  * Phase 4: candidate-poll loop that feeds the dispatcher.
  *
  * Runs in parallel with the inbox poller (`daemon/poller.ts`). The
- * inbox poller writes `~/.breeze/inbox.json` for the dashboard; this
+ * inbox poller writes `~/.mews/inbox.json` for the dashboard; this
  * loop calls `GhClient.collectCandidates()` (broker-backed) and hands
  * each candidate to `Dispatcher.submit()`.
  *

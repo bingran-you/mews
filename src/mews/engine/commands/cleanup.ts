@@ -6,7 +6,7 @@
  */
 
 import { cleanupExpiredClaims } from "../daemon/claim.js";
-import { resolveBreezePaths } from "../runtime/paths.js";
+import { resolveMewsPaths } from "../runtime/paths.js";
 import { resolveRunnerHome } from "../daemon/runner-skeleton.js";
 import { ThreadStore } from "../daemon/thread-store.js";
 
@@ -25,7 +25,7 @@ export async function runCleanup(
   const home = options.runnerHome ?? parseHome(argv) ?? resolveRunnerHome();
   const ttl = options.workspaceTtlSec ?? parseTtl(argv) ?? 48 * 3_600;
   const store = new ThreadStore({ runnerHome: home });
-  const paths = resolveBreezePaths();
+  const paths = resolveMewsPaths();
 
   const removed = store.cleanupOldWorkspaces(ttl, []);
   const clearedClaims = cleanupExpiredClaims(paths.claimsDir);

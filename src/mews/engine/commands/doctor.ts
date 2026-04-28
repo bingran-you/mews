@@ -3,13 +3,13 @@
  * `service.rs:107-143`.
  *
  * Prints a one-screen diagnostic of the daemon's local environment.
- * Designed for `first-tree breeze doctor` — no subprocesses the user
+ * Designed for `mews doctor` — no subprocesses the user
  * isn't already running.
  */
 
 import { existsSync, mkdirSync } from "node:fs";
 
-import { loadBreezeDaemonConfig } from "../runtime/config.js";
+import { loadMewsDaemonConfig } from "../runtime/config.js";
 import {
   identityHasRequiredScope,
   resolveDaemonIdentity,
@@ -61,7 +61,7 @@ export async function runDoctor(
   const parsed = parseDoctorArgs(argv);
   const home = options.runnerHome ?? parsed.home ?? resolveRunnerHome();
   mkdirSync(home, { recursive: true });
-  const config = loadBreezeDaemonConfig();
+  const config = loadMewsDaemonConfig();
   const repoFilter = parsed.allowRepo ?? options.allowRepo;
   const filter =
     repoFilter && repoFilter.length > 0
@@ -95,7 +95,7 @@ export async function runDoctor(
   const store = new ThreadStore({ runnerHome: home });
   const agents = detectAvailableAgents();
 
-  write("breeze-runner doctor");
+  write("mews-runner doctor");
   write(`home: ${home}`);
   write(`host: ${config.host}`);
   write(`login: ${identityLine}`);

@@ -1,10 +1,10 @@
 /**
- * Read/write `~/.breeze/inbox.json` with atomic rename and cross-process
+ * Read/write `~/.mews/inbox.json` with atomic rename and cross-process
  * advisory locking.
  *
  * SINGLE-WRITER RULE (spec doc 2 §1.3):
  * -------------------------------------
- * Only a poller loop — the Rust `breeze-runner` fetcher, the TS daemon
+ * Only a poller loop — the Rust `mews-runner` fetcher, the TS daemon
  * poller at `daemon/poller.ts`, or the one-shot TS `commands/poll.ts` —
  * may call `writeInbox` directly with a full payload. All other callers
  * (`status-manager`, ad-hoc commands, this module's consumers, the
@@ -88,7 +88,7 @@ function serializeEntry(entry: InboxEntry): Record<string, unknown> {
     html_url: entry.html_url,
     gh_state: entry.gh_state,
     labels: entry.labels,
-    breeze_status: entry.breeze_status,
+    mews_status: entry.mews_status,
   };
 }
 

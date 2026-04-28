@@ -1,5 +1,5 @@
 /**
- * Phase 3b: TypeScript port of the breeze daemon HTTP + SSE server.
+ * Phase 3b: TypeScript port of the mews daemon HTTP + SSE server.
  *
  * Source of truth: `http.rs` (384
  * lines). Contract pinned in the HTTP/SSE API contract (historical migration doc, now removed; see git history).
@@ -7,8 +7,8 @@
  * READ-ONLY DISCIPLINE:
  * ---------------------
  * This module NEVER calls `runtime/store.ts` writers. The HTTP server is
- * strictly a reader: it passes through `~/.breeze/inbox.json`, tails
- * `~/.breeze/activity.log`, and publishes SSE events produced by an
+ * strictly a reader: it passes through `~/.mews/inbox.json`, tails
+ * `~/.mews/activity.log`, and publishes SSE events produced by an
  * upstream bus. The single-writer rule for `inbox.json` (spec doc 2
  * §1.3) is owned by the poller; HTTP read paths either `fs.readFile` the
  * on-disk JSON directly (so they always see the last atomic rename) or
@@ -260,9 +260,9 @@ export interface HttpLogger {
 export interface StartHttpServerOptions {
   /** Port to bind on 127.0.0.1. Default 7878. */
   httpPort: number;
-  /** Path to `~/.breeze/inbox.json`. */
+  /** Path to `~/.mews/inbox.json`. */
   inboxPath: string;
-  /** Path to `~/.breeze/activity.log`. */
+  /** Path to `~/.mews/activity.log`. */
   activityLogPath: string;
   /** Shutdown signal. Server closes when this aborts. */
   signal: AbortSignal;
@@ -304,7 +304,7 @@ const DEFAULT_LOGGER: HttpLogger = {
  *
  * The server is single-writer-free: every route reads either from disk
  * (via `fs.promises`) or from the passed-in bus. Nothing here mutates
- * `~/.breeze`.
+ * `~/.mews`.
  */
 export async function startHttpServer(
   options: StartHttpServerOptions,
@@ -339,7 +339,7 @@ export async function startHttpServer(
           case "inbox":
             void writeInboxJsonFile(res, options.inboxPath).catch((err) => {
               logger.error(
-                `breeze http: /inbox handler failed: ${err instanceof Error ? err.message : String(err)}`,
+                `mews http: /inbox handler failed: ${err instanceof Error ? err.message : String(err)}`,
               );
               if (!res.headersSent) writePlain(res, 404, "inbox.json not found\n");
             });
@@ -363,7 +363,7 @@ export async function startHttpServer(
             })
               .catch((err) => {
                 logger.warn(
-                  `breeze http: sse stream ended with error: ${err instanceof Error ? err.message : String(err)}`,
+                  `mews http: sse stream ended with error: ${err instanceof Error ? err.message : String(err)}`,
                 );
               })
               .finally(() => {
@@ -379,7 +379,7 @@ export async function startHttpServer(
         }
       } catch (err) {
         logger.error(
-          `breeze http: handler crashed for ${req.method} ${req.url}: ${err instanceof Error ? err.message : String(err)}`,
+          `mews http: handler crashed for ${req.method} ${req.url}: ${err instanceof Error ? err.message : String(err)}`,
         );
         if (!res.headersSent) writePlain(res, 404, "not found\n");
       }
@@ -391,7 +391,7 @@ export async function startHttpServer(
   // drains — we still await `done` explicitly in `runDaemon`.
   server.on("clientError", (err) => {
     logger.warn(
-      `breeze http: client error: ${err instanceof Error ? err.message : String(err)}`,
+      `mews http: client error: ${err instanceof Error ? err.message : String(err)}`,
     );
   });
 
@@ -418,7 +418,7 @@ export async function startHttpServer(
   const address = server.address();
   const boundPort =
     typeof address === "object" && address !== null ? address.port : options.httpPort;
-  logger.info(`breeze: http server listening on http://127.0.0.1:${boundPort}`);
+  logger.info(`mews: http server listening on http://127.0.0.1:${boundPort}`);
 
   let stopped = false;
   const donePromise = new Promise<void>((resolve) => {
@@ -433,7 +433,7 @@ export async function startHttpServer(
       server.close((err) => {
         if (err) {
           logger.warn(
-            `breeze http: server.close error: ${err.message}`,
+            `mews http: server.close error: ${err.message}`,
           );
         }
         resolve();

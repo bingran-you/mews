@@ -1,12 +1,12 @@
 /**
  * Phase 3c: service-wide lock + per-notification claim helpers for the
- * TypeScript breeze daemon.
+ * TypeScript mews daemon.
  *
  * Port of `lock.rs`.
  *
  * SINGLE-WRITER RULE (spec doc 2 §1.3):
  * -------------------------------------
- * This module is **read-only** with respect to `~/.breeze/inbox.json`.
+ * This module is **read-only** with respect to `~/.mews/inbox.json`.
  * Everything it writes lives under the daemon-private lock/claim dirs:
  *   - `<lockDir>/` — one subdirectory per (host, login, profile) tuple,
  *     holding `lock.env` with pid/heartbeat/note. Mirrors Rust
@@ -265,7 +265,7 @@ export async function acquireServiceLock(
       const existing = readLockInfoFromPath(infoPath);
       if (existing && !isLockStale(existing)) {
         throw new Error(
-          `breeze daemon is already running for ${existing.login} on ${existing.host} (pid ${existing.pid}, profile "${existing.profile}")`,
+          `mews daemon is already running for ${existing.login} on ${existing.host} (pid ${existing.pid}, profile "${existing.profile}")`,
         );
       }
       // Stale (or malformed): scrub and retry.

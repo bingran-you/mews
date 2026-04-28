@@ -1,5 +1,5 @@
 /**
- * Append-only JSONL writer for `~/.breeze/activity.log`.
+ * Append-only JSONL writer for `~/.mews/activity.log`.
  *
  * Spec: the inbox/activity-log schema (historical migration doc, now removed; see git history) §2.
  *

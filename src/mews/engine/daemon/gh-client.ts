@@ -86,7 +86,7 @@ export class GhClient {
       [
         "api",
         // See #251: `all=true&participating=false` bypassed GitHub's server-side
-        // spam filter and let breeze act on mention-then-delete notifications.
+        // spam filter and let mews act on mention-then-delete notifications.
         // `participating=true` restricts to direct-participation notifications.
         "/notifications?participating=true&per_page=100",
         "--paginate",
@@ -426,8 +426,8 @@ export class GhClient {
         bucket: "core",
         mutating: false,
       });
-      // Required by gardener respond's `commitTime > reviewTime` idempotency
-      // check in snapshot mode. Without it, a breeze-runner retry (network
+      // Required for snapshot-mode idempotency checks against review timing.
+      // check in snapshot mode. Without it, a mews-runner retry (network
       // redelivery, crash recovery) would re-bump the attempts counter and
       // post a duplicate reply comment. See #158.
       await this.captureSnapshot(snapshotDir, "pr-commits.json", {
@@ -623,7 +623,7 @@ function errMessage(err: unknown): string {
 
 function renderSnapshotReadme(task: TaskCandidate, snapshotDir: string): string {
   return (
-    "breeze-runner prepared this local snapshot before the agent started.\n" +
+    "mews-runner prepared this local snapshot before the agent started.\n" +
     "\n" +
     "Use these files first to avoid redundant GitHub API calls.\n" +
     "\n" +
@@ -632,7 +632,7 @@ function renderSnapshotReadme(task: TaskCandidate, snapshotDir: string): string 
     `- Latest comment payload: ${join(snapshotDir, "latest-comment.json")}\n` +
     "- PR or issue material is stored next to those files when available.\n" +
     "\n" +
-    "If you still need `gh`, breeze-runner will broker and pace the command automatically.\n" +
+    "If you still need `gh`, mews-runner will broker and pace the command automatically.\n" +
     "\n" +
     `Task: ${task.kind} in ${task.repo}\n` +
     `Title: ${task.title}\n` +

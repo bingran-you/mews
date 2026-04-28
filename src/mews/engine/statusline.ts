@@ -1,7 +1,7 @@
 /**
  * Claude Code statusline hook.
  *
- * This file is its own dist bundle (`dist/breeze-statusline.js`). It is
+ * This file is its own dist bundle (`dist/mews-statusline.js`). It is
  * called many times per session by the Claude Code harness, so cold start
  * MUST stay below ~30ms. To achieve that:
  *   - zero npm dependencies (only `node:fs`, `node:path`, `node:os`)
@@ -9,14 +9,14 @@
  *   - hand-rolled field extraction so we never parse the whole inbox
  *     (common case: a few hundred notifications)
  *
- * Behaviour is a line-for-line port of `breeze-status`
- * +  `breeze-statusline-wrapper` (the wrapper just passes stdin through and
+ * Behaviour is a line-for-line port of `mews-status`
+ * +  `mews-statusline-wrapper` (the wrapper just passes stdin through and
  * prints our output). Stdin is drained silently per the Claude Code
  * statusline contract.
  *
  * Input: swallow stdin (Claude Code statusline hooks receive JSON).
  * Output: a single line to stdout, e.g.
- *   `/breeze: ⚠ 2 need-you · 52 PRs · 3 issues (+1 new)`
+ *   `/mews: ⚠ 2 need-you · 52 PRs · 3 issues (+1 new)`
  * or nothing when the inbox is empty/missing.
  */
 
@@ -29,17 +29,17 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** 10 minutes; matches `bin/breeze-status:25`. */
+/** 10 minutes; matches `bin/mews-status:25`. */
 const STALE_THRESHOLD_SECS = 600;
 
-function resolveBreezeDir(): string {
-  const override = process.env.BREEZE_DIR;
+function resolveMewsDir(): string {
+  const override = process.env.MEWS_DIR;
   if (override && override.length > 0) return override;
-  return join(homedir(), ".breeze");
+  return join(homedir(), ".mews");
 }
 
 /**
- * Parse the `breeze_status` counts from an inbox.json payload WITHOUT
+ * Parse the `mews_status` counts from an inbox.json payload WITHOUT
  * running a full JSON.parse on the whole file. We still use JSON.parse,
  * but only on the fast path; a real notification list is small enough
  * (<1000 entries) that this is well under the 30ms budget.
@@ -62,12 +62,12 @@ function readCounts(inboxPath: string): Counts | null {
   if (raw.length === 0) return null;
   let parsed: {
     last_poll?: string;
-    notifications?: Array<{ breeze_status?: string; type?: string }>;
+    notifications?: Array<{ mews_status?: string; type?: string }>;
   };
   try {
     parsed = JSON.parse(raw) as {
       last_poll?: string;
-      notifications?: Array<{ breeze_status?: string; type?: string }>;
+      notifications?: Array<{ mews_status?: string; type?: string }>;
     };
   } catch {
     return null;
@@ -82,7 +82,7 @@ function readCounts(inboxPath: string): Counts | null {
     new_by_type: new Map(),
   };
   for (const n of notifications) {
-    const st = n?.breeze_status;
+    const st = n?.mews_status;
     if (st === "new") {
       counts.new += 1;
       const t = typeof n.type === "string" ? n.type : "";
@@ -200,7 +200,7 @@ export function renderStatusline(
     }
   }
 
-  return { line: `/breeze: ${humanPart}${newSummary}${suffix}`, ring };
+  return { line: `/mews: ${humanPart}${newSummary}${suffix}`, ring };
 }
 
 export function main(
@@ -209,9 +209,9 @@ export function main(
   // Per spec, always drain stdin first.
   drainStdin();
 
-  const breezeDir = resolveBreezeDir();
-  const inboxPath = join(breezeDir, "inbox.json");
-  const bellStatePath = join(breezeDir, ".bell_state");
+  const mewsDir = resolveMewsDir();
+  const inboxPath = join(mewsDir, "inbox.json");
+  const bellStatePath = join(mewsDir, ".bell_state");
 
   if (!existsSync(inboxPath)) return 0;
 
@@ -219,7 +219,7 @@ export function main(
   try {
     const mtimeSecs = Math.floor(statSync(inboxPath).mtimeMs / 1000);
     if (nowSecs - mtimeSecs > STALE_THRESHOLD_SECS) {
-      process.stdout.write("/breeze: stale (poller not running?)\n");
+      process.stdout.write("/mews: stale (poller not running?)\n");
       return 0;
     }
   } catch {
@@ -239,13 +239,13 @@ export function main(
   return 0;
 }
 
-// Run only when this file is executed directly (i.e. `node dist/breeze-statusline.js`),
+// Run only when this file is executed directly (i.e. `node dist/mews-statusline.js`),
 // not when imported.
 const isDirectRun =
   typeof process !== "undefined" &&
   Array.isArray(process.argv) &&
   process.argv[1] !== undefined &&
-  /breeze-statusline(\.[cm]?js)?$/u.test(process.argv[1]);
+  /mews-statusline(\.[cm]?js)?$/u.test(process.argv[1]);
 if (isDirectRun) {
   process.exit(main());
 }

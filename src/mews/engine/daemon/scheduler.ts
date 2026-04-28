@@ -248,7 +248,7 @@ export class Scheduler {
       metadata.set(
         "summary",
         encodeMultiline(
-          "breeze-runner recovered this unfinished running task and re-queued it",
+          "mews-runner recovered this unfinished running task and re-queued it",
         ),
       );
       this.store.writeTaskMetadata(taskId, mapToRecord(metadata));
@@ -339,7 +339,7 @@ export function readRoutingSnapshotText(snapshotDir: string): string {
 
 /**
  * Port of `should_route_to_operator_repo` — heuristic for spotting
- * requests to reconfigure the breeze-runner itself.
+ * requests to reconfigure the mews-runner itself.
  */
 export function shouldRouteToOperatorRepo(
   contents: string,
@@ -356,16 +356,16 @@ export function shouldRouteToOperatorRepo(
     "tune",
     "restart",
   ].some((word) => contents.includes(word));
-  const mentionsBreezeRunner = contents.includes("breeze-runner");
+  const mentionsMewsRunner = contents.includes("mews-runner");
   const directsToOperator = [
     `@${lowerLogin}`,
     `${lowerLogin}'s agent`,
     `${lowerLogin}/${lowerLogin}`,
     "your agent",
-    "agent-team-foundation/breeze",
-    "breeze-runner service",
+    "bingran-you/mews",
+    "mews-runner service",
   ].some((pattern) => contents.includes(pattern));
-  return mentionsBreezeRunner && asksForChange && directsToOperator;
+  return mentionsMewsRunner && asksForChange && directsToOperator;
 }
 
 /**

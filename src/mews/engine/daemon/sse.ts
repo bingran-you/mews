@@ -26,7 +26,7 @@
  * payloads Phase 3b emits (they are compact JSON without a trailing
  * newline) but we preserve it anyway so the TS server is a drop-in
  * replacement for the Rust one. The byte-exact test
- * (`tests/breeze-daemon-http.test.ts::encodes SSE frames identically to
+ * (`tests/mews-daemon-http.test.ts::encodes SSE frames identically to
  * Rust`) pins this.
  *
  * Keep-alive cadence: 15s of idle emits `: ping\n\n`, matching
@@ -184,7 +184,7 @@ export function createInboxMtimeBus(options: {
         if (
           entry &&
           typeof entry === "object" &&
-          (entry as { breeze_status?: unknown }).breeze_status === "new"
+          (entry as { mews_status?: unknown }).mews_status === "new"
         ) {
           new_count += 1;
         }

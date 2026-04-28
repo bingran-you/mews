@@ -159,7 +159,7 @@ export class WorkspaceManager {
     task: WorkspaceCandidate,
   ): Promise<string> {
     if (task.prNumber && task.prNumber > 0) {
-      const refName = `refs/remotes/origin/breeze-runner-pr-${task.prNumber}`;
+      const refName = `refs/remotes/origin/mews-runner-pr-${task.prNumber}`;
       await this.runChecked({
         args: this.authArgs([
           "--git-dir",
@@ -189,7 +189,7 @@ export class WorkspaceManager {
         workspaceDir,
         "config",
         "user.name",
-        `${this.identity.login} via breeze-runner`,
+        `${this.identity.login} via mews-runner`,
       ],
     });
     await this.runGit({
