@@ -73,7 +73,7 @@ export function runInstall(
 
   Bootstraps the local mews daemon:
 
-    1. Checks for gh, jq, and gh auth status
+    1. Checks for gh and gh auth status
     2. Creates \`~/.mews/config.yaml\` with defaults (if absent)
     3. Starts the daemon via \`mews start\`
 
@@ -114,15 +114,8 @@ export function runInstall(
     write("ERROR: gh is not authenticated. Run `gh auth login` first.");
     return 1;
   }
-  if (!checkCommand("jq")) {
-    write(
-      "ERROR: jq is not installed. Install it: brew install jq (macOS) or apt install jq (Linux)",
-    );
-    return 1;
-  }
   write("  gh CLI: OK");
   write("  gh auth: OK");
-  write("  jq: OK");
   write("");
 
   write(`Setting up ${mewsDir}...`);

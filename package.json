@@ -1,7 +1,7 @@
 {
   "name": "mews",
-  "version": "0.1.0",
-  "description": "A local daemon that watches GitHub notifications and dispatches Codex CLI or Claude Code tasks.",
+  "version": "0.3.0",
+  "description": "A local GitHub notification daemon that scopes work to allow-listed repos and dispatches local coding agents.",
   "homepage": "https://github.com/bingran-you/mews#readme",
   "bugs": {
     "url": "https://github.com/bingran-you/mews/issues"
@@ -24,8 +24,7 @@
   },
   "files": [
     "dist",
-    "assets",
-    "src/mews/VERSION"
+    "assets"
   ],
   "scripts": {
     "build": "tsdown",
@@ -33,9 +32,13 @@
     "e2e:live:install-browser": "playwright install chromium",
     "prepack": "pnpm build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm build && pnpm typecheck && pnpm test"
   },
   "packageManager": "pnpm@10.25.0",
+  "engines": {
+    "node": ">=20"
+  },
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^25.5.0",

@@ -13,7 +13,7 @@
  * Priority (highest wins): CLI overrides > env vars > yaml > defaults.
  *
  * NOTE: runtime data (`inbox.json`, `activity.log`, claim locks, and
- * config.yaml`) all live under `~/.mews/`.
+ * config.yaml`) live under `MEWS_DIR` when set, else `~/.mews/`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -106,6 +106,8 @@ export interface LoadDaemonConfigDeps {
   readFile?: (path: string) => string;
   fileExists?: (path: string) => boolean;
   homeDir?: () => string;
+  /** Explicit mews store root; beats MEWS_DIR and the default ~/.mews path. */
+  mewsDir?: string;
   /** Explicit path override; primarily for tests. Beats the search path. */
   configPath?: string;
   /** CLI overrides that beat env and yaml. */
@@ -117,8 +119,9 @@ export interface LoadDaemonConfigDeps {
  */
 export function mewsDaemonConfigSearchPaths(
   homeDir: string = homedir(),
+  mewsDir?: string,
 ): string[] {
-  return [join(homeDir, ".mews", "config.yaml")];
+  return [join(mewsDir ?? join(homeDir, ".mews"), "config.yaml")];
 }
 
 interface RawYamlConfig {
@@ -192,6 +195,7 @@ export function loadMewsDaemonConfig(
   const fileExists = deps.fileExists ?? existsSync;
   const homeDir = deps.homeDir ?? homedir;
   const cli = deps.cliOverrides ?? {};
+  const mewsDir = deps.mewsDir ?? env("MEWS_DIR");
 
   // 1. Defaults.
   const config: DaemonConfig = { ...DAEMON_CONFIG_DEFAULTS };
@@ -199,7 +203,7 @@ export function loadMewsDaemonConfig(
   // 2. YAML overlay.
   const candidates = deps.configPath
     ? [deps.configPath]
-    : mewsDaemonConfigSearchPaths(homeDir());
+    : mewsDaemonConfigSearchPaths(homeDir(), mewsDir);
   for (const path of candidates) {
     if (!fileExists(path)) continue;
     let raw: string;
