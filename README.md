@@ -62,5 +62,12 @@ pnpm verify
 
 That runs the same build, typecheck, and unit test flow used in CI.
 
+For the repo-scoped live harness that starts the real background service and
+verifies the dashboard end to end:
+
+```bash
+pnpm e2e:live
+```
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the local development loop and the
 live end-to-end harness.
