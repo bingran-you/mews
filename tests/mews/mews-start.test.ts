@@ -53,7 +53,7 @@ describe("runStart", () => {
     const lines: string[] = [];
     const code = await runStart(["--allow-repo", "owner/repo"], {
       runnerHome: "/tmp/mews-home/runner",
-      entrypoint: "/tmp/mews/dist/cli.js",
+      entrypoint: "/tmp/mews/dist/cli.mjs",
       write: (line) => lines.push(line),
     });
 
@@ -63,7 +63,7 @@ describe("runStart", () => {
         runnerHome: "/tmp/mews-home/runner",
         executable: process.execPath,
         arguments: [
-          "/tmp/mews/dist/cli.js",
+          "/tmp/mews/dist/cli.mjs",
           "mews",
           "daemon",
           "--backend=ts",
@@ -109,7 +109,7 @@ describe("runStart", () => {
     const lines: string[] = [];
     const code = await runStart(["--allow-repo", "owner/repo"], {
       runnerHome: "/tmp/mews-home/runner",
-      entrypoint: "/tmp/mews/dist/cli.js",
+      entrypoint: "/tmp/mews/dist/cli.mjs",
       write: (line) => lines.push(line),
     });
 

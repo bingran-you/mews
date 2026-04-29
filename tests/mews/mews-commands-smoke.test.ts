@@ -144,14 +144,14 @@ describe("runInstall", () => {
       spawn,
       startCommand: {
         cmd: process.execPath,
-        args: ["/tmp/mews/dist/cli.js", "start"],
+        args: ["/tmp/mews/dist/cli.mjs", "start"],
       },
     });
     expect(code).toBe(0);
     expect(spawn).toHaveBeenCalledWith(
       process.execPath,
       [
-        "/tmp/mews/dist/cli.js",
+        "/tmp/mews/dist/cli.mjs",
         "start",
         "--allow-repo",
         "owner/repo",
@@ -162,9 +162,9 @@ describe("runInstall", () => {
   });
 
   it("resolves the current CLI entrypoint for nested self-starts", () => {
-    expect(resolveSelfStartCommand("/tmp/mews/dist/cli.js")).toEqual({
+    expect(resolveSelfStartCommand("/tmp/mews/dist/cli.mjs")).toEqual({
       cmd: process.execPath,
-      args: ["/tmp/mews/dist/cli.js", "start"],
+      args: ["/tmp/mews/dist/cli.mjs", "start"],
     });
   });
 });
