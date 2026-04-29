@@ -18,8 +18,8 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Walk up from the current module until we find the npm package root
- * (the directory containing the package.json whose `name` is
- * `mews`).
+ * (the directory containing the package.json whose `name` matches this
+ * package).
  *
  * We can't reuse `resolveBundledPackageRoot` from the tree product
  * because that one gates on the tree SKILL.md existing, which is a
@@ -36,7 +36,7 @@ export function resolveFirstTreePackageRoot(
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
           name?: string;
         };
-        if (pkg.name === "mews") {
+        if (pkg.name === "mews" || pkg.name === "@bingran/mews") {
           return dir;
         }
       } catch {
