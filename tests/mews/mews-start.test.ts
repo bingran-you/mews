@@ -64,7 +64,6 @@ describe("runStart", () => {
         executable: process.execPath,
         arguments: [
           "/tmp/mews/dist/cli.mjs",
-          "mews",
           "daemon",
           "--backend=ts",
           "--allow-repo",

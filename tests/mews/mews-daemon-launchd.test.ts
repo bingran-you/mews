@@ -53,7 +53,7 @@ describe("renderLaunchdPlist", () => {
       login: "alice",
       profile: "default",
       executable: "/usr/local/bin/mews",
-      arguments: ["mews", "daemon", "--backend=ts"],
+      arguments: ["daemon", "--backend=ts"],
       logPath: "/tmp/mews.log",
       env: { PATH: "/opt/bin", HOME: "/Users/alice" },
       resolveEnvVar: noResolve,
@@ -66,7 +66,7 @@ describe("renderLaunchdPlist", () => {
     expect(xml).toContain(
       "<string>/usr/local/bin/mews</string>",
     );
-    expect(xml).toContain("<string>mews</string>");
+    expect(xml).toContain("<string>daemon</string>");
     expect(xml).toContain("<string>--backend=ts</string>");
     expect(xml).toContain("<string>/tmp/mews.log</string>");
     expect(xml).toContain("<key>PATH</key>");
@@ -94,7 +94,7 @@ describe("renderLaunchdPlist", () => {
       login: "alice",
       profile: "default",
       executable: "/usr/local/bin/mews",
-      arguments: ["mews", "daemon", "--backend=ts"],
+      arguments: ["daemon", "--backend=ts"],
       logPath: "/tmp/mews.log",
       env: {
         PATH: "/opt/bin",
@@ -147,7 +147,6 @@ describe("start command self-invocation helpers", () => {
       ]),
     ).toEqual([
       "/opt/mews/dist/cli.mjs",
-      "mews",
       "daemon",
       "--backend=ts",
       "--allow-repo",

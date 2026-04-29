@@ -221,7 +221,8 @@ export function defaultDaemonArgs(
   argv: readonly string[],
   prefixArgs: readonly string[] = [],
 ): string[] {
-  // The ported daemon entrypoint is `mews daemon --backend=ts`.
+  // In the standalone `mews` package the daemon entrypoint is the same CLI
+  // binary invoked as `daemon --backend=ts`.
   const forwarded: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -234,5 +235,5 @@ export function defaultDaemonArgs(
     if (a.startsWith("--home=") || a.startsWith("--profile=")) continue;
     forwarded.push(a);
   }
-  return [...prefixArgs, "mews", "daemon", "--backend=ts", ...forwarded];
+  return [...prefixArgs, "daemon", "--backend=ts", ...forwarded];
 }
