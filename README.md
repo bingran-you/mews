@@ -1,4 +1,6 @@
-# mews: represent you to finish all the work, when you are sleeping.
+# mews
+
+## represent you to finish all the work, when you are sleeping.
 
 `mews` is a local GitHub notification daemon for a small set of repos you
 explicitly allow. It polls notifications, keeps a local inbox under
