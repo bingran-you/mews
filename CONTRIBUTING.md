@@ -46,4 +46,9 @@ mention notification. Set one of:
 - `MEWS_E2E_SECONDARY_USER`
 - `MEWS_E2E_SECONDARY_TOKEN`
 
+By default the harness starts and stops the real background service with
+`mews start` / `mews stop` and scopes the run to `bingran-you/mews`. If you
+override `MEWS_E2E_REPO`, it still must be a single `owner/repo` value; CSV
+scopes and wildcards are rejected on purpose.
+
 Artifacts are written under `.artifacts/live-e2e/`.

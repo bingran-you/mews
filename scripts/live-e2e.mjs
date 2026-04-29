@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -41,6 +41,18 @@ function fail(message) {
   throw new Error(message);
 }
 
+function ensureSingleRepoScope(repoName) {
+  if (
+    repoName.includes(",") ||
+    repoName.includes("*") ||
+    !/^[^/\s]+\/[^/\s]+$/u.test(repoName)
+  ) {
+    fail(
+      `MEWS_E2E_REPO must be a single owner/repo scope with no wildcards or CSV values; got ${repoName}`,
+    );
+  }
+}
+
 function execGh(args, options = {}) {
   return execFileSync("gh", args, {
     cwd: repoRoot,
@@ -74,6 +86,43 @@ async function fetchJson(port, pathname) {
     throw new Error(`GET ${pathname} failed with ${response.status}`);
   }
   return response.json();
+}
+
+function runCli(args, options = {}) {
+  return spawnSync(process.execPath, ["dist/cli.mjs", ...args], {
+    cwd: repoRoot,
+    env: { ...process.env, ...(options.env ?? {}) },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function writeCommandCapture(path, result) {
+  writeFileSync(
+    path,
+    [
+      `$ node dist/cli.mjs ${result.args.join(" ")}`,
+      `status: ${result.status ?? "null"}`,
+      "",
+      "--- stdout ---",
+      result.stdout ?? "",
+      "",
+      "--- stderr ---",
+      result.stderr ?? "",
+      "",
+    ].join("\n"),
+  );
+}
+
+function combinedOutput(result) {
+  return `${result.stdout ?? ""}${result.stderr ?? ""}`;
+}
+
+function parseOutputLine(text, prefix) {
+  for (const line of text.split("\n")) {
+    if (line.startsWith(prefix)) return line.slice(prefix.length).trim();
+  }
+  return null;
 }
 
 function ensureSecondaryActor() {
@@ -151,7 +200,7 @@ function buildAgentWrapper({
       ? `#!${process.execPath}
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
-const logPath = process.env.MEWS_E2E_AGENT_LOG;
+const logPath = ${JSON.stringify(logPath)};
 const outIndex = args.indexOf("--output-last-message");
 const outputPath = outIndex >= 0 ? args[outIndex + 1] : "";
 const promptPath = args[args.length - 1] ?? "";
@@ -178,7 +227,7 @@ process.stdout.write("codex wrapper complete\\n");
 import { appendFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const promptText = args[args.length - 1] ?? "";
-appendFileSync(process.env.MEWS_E2E_AGENT_LOG, JSON.stringify({
+appendFileSync(${JSON.stringify(logPath)}, JSON.stringify({
   agent: "claude",
   argv: args,
   cwd: process.cwd(),
@@ -226,9 +275,14 @@ function makePhaseRuntime(name, index) {
     phaseDir,
     stateDir,
     runnerHome,
+    profile: `live-e2e-${timestamp}-${name}`,
     port: basePort + index,
     dashboardScreenshot: join(phaseDir, "dashboard.png"),
     daemonLog: join(phaseDir, "daemon.log"),
+    startOutputFile: join(phaseDir, "start.txt"),
+    stopOutputFile: join(phaseDir, "stop.txt"),
+    statusFile: join(phaseDir, "status.txt"),
+    runtimeStatusFile: join(phaseDir, "runtime-status.env"),
     traceFile: join(phaseDir, "trace.log"),
     inboxFile: join(phaseDir, "inbox.json"),
     tasksFile: join(phaseDir, "tasks.json"),
@@ -237,11 +291,19 @@ function makePhaseRuntime(name, index) {
 }
 
 function startDaemon(phase, options = {}) {
+  const env = {
+    ...options.extraEnv,
+    MEWS_DIR: phase.stateDir,
+    MEWS_HOME: phase.runnerHome,
+  };
   const args = [
-    "dist/cli.mjs",
-    "run",
+    "start",
     "--allow-repo",
     repo,
+    "--home",
+    phase.runnerHome,
+    "--profile",
+    phase.profile,
     "--http-port",
     String(phase.port),
     "--poll-interval-secs",
@@ -249,25 +311,64 @@ function startDaemon(phase, options = {}) {
   ];
   if (options.dryRun) args.push("--dry-run");
 
-  const child = spawn(process.execPath, args, {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      ...options.extraEnv,
-      MEWS_DIR: phase.stateDir,
-      MEWS_HOME: phase.runnerHome,
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout.on("data", (chunk) => writeFileSync(phase.daemonLog, chunk, { flag: "a" }));
-  child.stderr.on("data", (chunk) => writeFileSync(phase.daemonLog, chunk, { flag: "a" }));
-  return child;
+  const result = runCli(args, { env });
+  result.args = args;
+  writeCommandCapture(phase.startOutputFile, result);
+  if (result.status !== 0) {
+    fail(`${phase.name}: \`mews start\` failed\n${combinedOutput(result)}`);
+  }
+
+  const output = combinedOutput(result);
+  const logPath = parseOutputLine(output, "log: ");
+  if (!logPath) {
+    fail(`${phase.name}: \`mews start\` did not print a daemon log path`);
+  }
+
+  log(phase.traceFile, `Started via mews start (profile=${phase.profile})`);
+  return { env, logPath };
 }
 
-async function stopDaemon(child) {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await new Promise((resolvePromise) => child.once("exit", resolvePromise));
+function captureDaemonLog(phase, runtime) {
+  if (!runtime?.logPath || !existsSync(runtime.logPath)) return;
+  writeFileSync(phase.daemonLog, readFileSync(runtime.logPath, "utf8"));
+}
+
+async function stopDaemon(phase, runtime, options = {}) {
+  const result = runCli(
+    ["stop", "--home", phase.runnerHome, "--profile", phase.profile],
+    { env: runtime?.env ?? { MEWS_DIR: phase.stateDir, MEWS_HOME: phase.runnerHome } },
+  );
+  result.args = ["stop", "--home", phase.runnerHome, "--profile", phase.profile];
+  writeCommandCapture(phase.stopOutputFile, result);
+  captureDaemonLog(phase, runtime);
+
+  if ((result.status ?? 1) !== 0 && !options.bestEffort) {
+    fail(`${phase.name}: \`mews stop\` failed\n${combinedOutput(result)}`);
+  }
+
+  try {
+    await waitFor(
+      async () => {
+        try {
+          const response = await fetch(`http://127.0.0.1:${phase.port}/healthz`);
+          return response.ok ? null : true;
+        } catch {
+          return true;
+        }
+      },
+      {
+        timeoutMs: 20_000,
+        intervalMs: 1_000,
+        label: `${phase.name}: daemon health check still up after stop`,
+      },
+    );
+  } catch (error) {
+    if (!options.bestEffort) throw error;
+    log(
+      phase.traceFile,
+      `WARN: best-effort stop failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 async function closeProbeIssue(issueNumber) {
@@ -287,10 +388,67 @@ async function closeProbeIssue(issueNumber) {
   }
 }
 
+function assertOnlyRepo(entries, label) {
+  const repos = Array.from(
+    new Set(entries.map((entry) => String(entry?.repo ?? "")).filter(Boolean)),
+  );
+  if (repos.length === 0) {
+    fail(`${label}: payload did not contain any repo values`);
+  }
+  if (repos.some((value) => value !== repo)) {
+    fail(`${label}: expected only ${repo}, got ${repos.join(", ")}`);
+  }
+}
+
+function computeStatusCounts(notifications) {
+  const counts = { new: 0, human: 0, wip: 0, done: 0 };
+  for (const notification of notifications) {
+    const key = notification?.mews_status;
+    if (Object.hasOwn(counts, key)) counts[key] += 1;
+  }
+  return counts;
+}
+
+async function waitForStatusSnapshot(phase, runtime) {
+  const statusArgs = [
+    "status",
+    "--home",
+    phase.runnerHome,
+    "--profile",
+    phase.profile,
+    "--allow-repo",
+    repo,
+  ];
+
+  const statusOutput = await waitFor(
+    async () => {
+      const result = runCli(statusArgs, { env: runtime.env });
+      const text = combinedOutput(result);
+      if ((result.status ?? 1) !== 0) return null;
+      if (!text.includes(`allowed repos: ${repo}`)) return null;
+      return text;
+    },
+    {
+      label: `${phase.name}: mews status never reported the expected repo scope`,
+    },
+  );
+
+  writeFileSync(phase.statusFile, statusOutput);
+
+  const runtimeStatusPath = join(phase.runnerHome, "runtime", "status.env");
+  if (!existsSync(runtimeStatusPath)) {
+    fail(`${phase.name}: runtime/status.env was not written`);
+  }
+  const runtimeStatus = readFileSync(runtimeStatusPath, "utf8");
+  writeFileSync(phase.runtimeStatusFile, runtimeStatus);
+  if (!runtimeStatus.includes(`allowed_repos=${repo}`)) {
+    fail(`${phase.name}: runtime/status.env did not record ${repo}`);
+  }
+}
+
 async function verifyDashboard({
   phase,
   title,
-  expectedStatus,
 }) {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -298,14 +456,79 @@ async function verifyDashboard({
     await page.goto(`http://127.0.0.1:${phase.port}/dashboard`, {
       waitUntil: "domcontentloaded",
     });
-    await page.locator("#rows tr", { hasText: title }).waitFor({
-      timeout: 90_000,
-    });
-    const taskRow = page.locator("#task-rows tr", { hasText: title });
-    await taskRow.waitFor({ timeout: 90_000 });
-    await taskRow.locator(".badge", { hasText: expectedStatus }).first().waitFor({
-      timeout: 90_000,
-    });
+
+    await page.waitForFunction(
+      () => document.getElementById("sse-status")?.textContent === "live",
+      undefined,
+      { timeout: 90_000 },
+    );
+    await page.waitForFunction(
+      () => document.getElementById("last-poll")?.textContent?.startsWith("last poll "),
+      undefined,
+      { timeout: 90_000 },
+    );
+
+    await waitFor(
+      async () => {
+        const liveInbox = await fetchJson(phase.port, "/inbox");
+        const liveTasks = await fetchJson(phase.port, "/tasks");
+        const matchingNotification = liveInbox.notifications?.find(
+          (entry) => entry.title === title,
+        );
+        const matchingTask = liveTasks.tasks?.find(
+          (entry) => entry.title === title,
+        );
+        if (!matchingNotification || !matchingTask) return null;
+
+        const counts = computeStatusCounts(liveInbox.notifications ?? []);
+        for (const key of ["new", "human", "wip", "done"]) {
+          const text = await page.locator(`#counts .count-chip.${key} b`).textContent();
+          if (text?.trim() !== String(counts[key])) return null;
+        }
+
+        const notificationRows = await page.locator("#rows tr").count();
+        if (notificationRows !== liveInbox.notifications.length) return null;
+
+        const taskRows = await page.locator("#task-rows tr").count();
+        if (taskRows !== liveTasks.tasks.length) return null;
+
+        const notificationRow = page.locator("#rows tr", {
+          hasText: matchingNotification.title,
+        }).first();
+        if ((await notificationRow.count()) === 0) return null;
+
+        const notificationBadge =
+          (await notificationRow.locator(".badge").first().textContent())?.trim();
+        if (notificationBadge !== matchingNotification.mews_status) return null;
+        const notificationRepo =
+          (await notificationRow.locator("td.repo").textContent())?.trim();
+        if (notificationRepo !== repo) return null;
+        const notificationHref = await notificationRow.locator("td a").getAttribute("href");
+        if (notificationHref !== matchingNotification.html_url) return null;
+
+        const taskRow = page.locator("#task-rows tr", {
+          hasText: matchingTask.title,
+        }).first();
+        if ((await taskRow.count()) === 0) return null;
+
+        const taskBadge = (await taskRow.locator(".badge").first().textContent())?.trim();
+        if (taskBadge !== matchingTask.status) return null;
+        const taskRepo = (await taskRow.locator("td.repo").textContent())?.trim();
+        if (taskRepo !== repo) return null;
+        const taskSummary = (await taskRow.locator("td").nth(4).textContent())?.trim() ?? "";
+        if ((matchingTask.summary ?? "") && taskSummary !== matchingTask.summary) {
+          return null;
+        }
+
+        return true;
+      },
+      {
+        timeoutMs: 90_000,
+        intervalMs: 1_000,
+        label: `${phase.name}: dashboard never converged with the live inbox/tasks payload`,
+      },
+    );
+
     await page.screenshot({ path: phase.dashboardScreenshot, fullPage: true });
   } finally {
     await browser.close();
@@ -329,22 +552,23 @@ async function runPhase({
   const title = `[mews live e2e ${name} ${timestamp}]`;
   const mentionBody = `@${primaryUser} live mews ${name} probe from a secondary actor.`;
   const issueNumber = createProbeIssue(title);
-  let daemon;
+  let runtime = null;
   let agentLogPath = null;
+  let stopped = false;
 
   log(phase.traceFile, `Artifacts: ${phase.phaseDir}`);
+  log(phase.traceFile, `Repo scope: ${repo}`);
   log(phase.traceFile, `Created probe issue #${issueNumber}`);
 
   try {
     if (mode === "dry-run") {
-      daemon = startDaemon(phase, { dryRun: true });
+      runtime = startDaemon(phase, { dryRun: true });
     } else {
       const wrapper = createWrapperBin({ phaseDir: phase.phaseDir, agent: mode });
       agentLogPath = wrapper.agentLog;
-      daemon = startDaemon(phase, {
+      runtime = startDaemon(phase, {
         extraEnv: {
-          PATH: `${wrapper.binDir}:/usr/bin:/bin:/usr/sbin:/sbin`,
-          MEWS_E2E_AGENT_LOG: agentLogPath,
+          PATH: `${wrapper.binDir}:${process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin"}`,
         },
       });
     }
@@ -360,6 +584,8 @@ async function runPhase({
       },
       { label: `${name}: daemon health check did not come up` },
     );
+
+    await waitForStatusSnapshot(phase, runtime);
 
     postSecondaryMention(issueNumber, mentionBody);
     log(phase.traceFile, "Posted secondary mention comment");
@@ -378,6 +604,13 @@ async function runPhase({
       { label: `${name}: probe issue never appeared in /inbox` },
     );
     writeFileSync(phase.inboxFile, JSON.stringify(inboxPayload, null, 2));
+    assertOnlyRepo(inboxPayload.notifications ?? [], `${name}: /inbox`);
+    const matchingNotification = inboxPayload.notifications.find(
+      (entry) => entry.title === title,
+    );
+    if (!matchingNotification) {
+      fail(`${name}: inbox payload did not include the probe issue`);
+    }
 
     const expectedTaskStatus = mode === "dry-run" ? "simulated" : "handled";
     const tasksPayload = await waitFor(
@@ -402,9 +635,14 @@ async function runPhase({
     if (!matchingTask) {
       fail(`${name}: tasks payload did not include the probe task`);
     }
+    assertOnlyRepo(tasksPayload.tasks ?? [], `${name}: /tasks`);
 
     const activityPayload = await fetchJson(phase.port, "/activity");
     writeFileSync(phase.activityFile, JSON.stringify(activityPayload, null, 2));
+    if (!Array.isArray(activityPayload) || activityPayload.length === 0) {
+      fail(`${name}: /activity did not return any events`);
+    }
+    assertOnlyRepo(activityPayload, `${name}: /activity`);
 
     if (mode !== "dry-run" && agentLogPath) {
       const invocations = parseAgentLog(agentLogPath);
@@ -444,18 +682,23 @@ async function runPhase({
     await verifyDashboard({
       phase,
       title,
-      expectedStatus: expectedTaskStatus,
     });
     log(phase.traceFile, `Dashboard screenshot: ${phase.dashboardScreenshot}`);
+
+    await stopDaemon(phase, runtime);
+    stopped = true;
     log(phase.traceFile, `${name} verification passed.`);
   } finally {
     await closeProbeIssue(issueNumber);
-    await stopDaemon(daemon);
+    if (!stopped) {
+      await stopDaemon(phase, runtime, { bestEffort: true });
+    }
   }
 }
 
 async function main() {
   ensureSecondaryActor();
+  ensureSingleRepoScope(repo);
   detectPrimaryUser();
   mkdirSync(artifactsRoot, { recursive: true });
   if (!existsSync(join(repoRoot, "dist", "cli.mjs"))) {
@@ -463,6 +706,7 @@ async function main() {
   }
 
   log(join(artifactsRoot, "trace.log"), `Primary GitHub user: ${primaryUser}`);
+  log(join(artifactsRoot, "trace.log"), `Repo scope: ${repo}`);
   log(join(artifactsRoot, "trace.log"), `Artifacts root: ${artifactsRoot}`);
 
   await runPhase({ index: 0, name: "dry-run", mode: "dry-run" });
