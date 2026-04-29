@@ -16,6 +16,13 @@ rest of your GitHub account.
 - GitHub CLI (`gh`) authenticated for the host you want to poll
 - Playwright Chromium only when you run the live end-to-end harness
 
+## Install From npm
+
+```bash
+npm install -g @bingran/mews
+mews --version
+```
+
 ## Install From Source
 
 ```bash

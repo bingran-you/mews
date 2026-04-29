@@ -122,7 +122,7 @@ function resolveDashboardPath(startUrl: string = import.meta.url): string {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
           name?: string;
         };
-        if (pkg.name === "mews") {
+        if (pkg.name === "mews" || pkg.name === "@bingran/mews") {
           return join(dir, "assets", "dashboard.html");
         }
       } catch {

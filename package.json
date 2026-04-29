@@ -1,6 +1,6 @@
 {
-  "name": "mews",
-  "version": "0.3.0",
+  "name": "@bingran/mews",
+  "version": "0.3.1",
   "description": "A local GitHub notification daemon that scopes work to allow-listed repos and dispatches local coding agents.",
   "homepage": "https://github.com/bingran-you/mews#readme",
   "bugs": {
@@ -38,6 +38,9 @@
   "packageManager": "pnpm@10.25.0",
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "Apache-2.0",
   "devDependencies": {
