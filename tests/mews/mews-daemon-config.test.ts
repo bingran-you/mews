@@ -110,6 +110,12 @@ httpPort: 8080
     expect(paths).toEqual([join(tmp, ".mews", "config.yaml")]);
   });
 
+  it("searches MEWS_DIR/config.yaml when MEWS_DIR is set", () => {
+    const mewsDir = join(tmp, "custom-mews");
+    const paths = mewsDaemonConfigSearchPaths(tmp, mewsDir);
+    expect(paths).toEqual([join(mewsDir, "config.yaml")]);
+  });
+
   it("honors MEWS_INBOX_POLL_INTERVAL_SECS as a fallback env key", () => {
     const envBag: Record<string, string> = {
       MEWS_INBOX_POLL_INTERVAL_SECS: "15",
@@ -246,5 +252,21 @@ httpPort: 8080
       homeDir: () => tmp,
     });
     expect(cfg.pollIntervalSec).toBe(7);
+  });
+
+  it("uses MEWS_DIR as the config root for the default search path", () => {
+    const mewsDir = join(tmp, "alt-mews");
+    const configPath = join(mewsDir, "config.yaml");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { mkdirSync } = require("node:fs") as typeof import("node:fs");
+    mkdirSync(mewsDir, { recursive: true });
+    writeFileSync(configPath, "http_port: 9090\n", "utf-8");
+
+    const cfg = loadMewsDaemonConfig({
+      env: (name) => (name === "MEWS_DIR" ? mewsDir : undefined),
+      homeDir: () => "/ignored-home",
+    });
+
+    expect(cfg.httpPort).toBe(9090);
   });
 });

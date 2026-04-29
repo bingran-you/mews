@@ -1,31 +1,66 @@
 # mews
 
-Mews is a local daemon for GitHub notifications.
+`mews` is a local GitHub notification daemon for a small set of repos you
+explicitly allow. It polls notifications, keeps a local inbox under
+`~/.mews/`, serves a browser dashboard, and can dispatch Codex CLI or Claude
+Code work for actionable items.
 
-It runs on your machine, polls GitHub notifications for the repos you allow,
-shows a live dashboard in the browser, and can dispatch work to Codex CLI or
-Claude Code CLI.
+The daemon only acts on repos you pass through `--allow-repo`. That keeps the
+runtime predictable and avoids accidentally scanning or scheduling work for the
+rest of your GitHub account.
 
-Core responsibilities:
+## Requirements
 
-- ingest GitHub notifications across pull requests, comments, review requests, issues, and discussions
-- maintain local state for inbox items and task execution
-- dispatch local coding agents against actionable work
-- expose the live state in a browser dashboard
+- Node.js 20+
+- pnpm 10+
+- GitHub CLI (`gh`) authenticated for the host you want to poll
+- Playwright Chromium only when you run the live end-to-end harness
 
-Main commands:
+## Install From Source
 
-- `mews install --allow-repo owner/repo`
-- `mews start --allow-repo owner/repo`
-- `mews status`
-- `mews watch`
-- `mews poll`
-- `pnpm e2e:live`
+```bash
+pnpm install
+pnpm build
+pnpm link --global
+mews --version
+```
 
-Runtime data lives under `~/.mews/`.
+## Quickstart
 
-Live end-to-end:
+```bash
+mews install --allow-repo bingran-you/mews
+mews status
+```
 
-- `pnpm e2e:live` builds the CLI, starts the daemon in `--dry-run` mode, creates a temporary probe issue in `bingran-you/mews`, uses a secondary GitHub actor to mention the primary user, and verifies `/inbox`, `/tasks`, and the browser dashboard.
-- Set either `MEWS_E2E_SECONDARY_USER` or `MEWS_E2E_SECONDARY_TOKEN`.
-- Run `pnpm e2e:live:install-browser` once before the first browser-backed run.
+Then open `http://127.0.0.1:7878/dashboard`.
+
+Daemon-starting commands require an explicit repo scope:
+
+```bash
+mews start --allow-repo owner/repo
+mews start --allow-repo owner/repo,owner/*
+```
+
+Use `mews help <command>` or `mews <command> --help` for command details.
+
+## Command Overview
+
+- `mews install --allow-repo ...` checks `gh`, writes `config.yaml` if needed, and starts the daemon
+- `mews start --allow-repo ...` launches the daemon in the background
+- `mews stop` stops the background daemon
+- `mews status` prints the current lock and runtime status
+- `mews doctor` diagnoses auth, lock, and runtime state
+- `mews poll` runs one notifications poll without starting the daemon
+- `mews watch` opens the local TUI inbox
+- `mews run-once --allow-repo ...` runs one full daemon cycle and exits
+
+## Development
+
+```bash
+pnpm verify
+```
+
+That runs the same build, typecheck, and unit test flow used in CI.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local development loop and the
+live end-to-end harness.

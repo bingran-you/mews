@@ -120,6 +120,7 @@ describe("mews-statusline dist bundle", () => {
   const BUNDLE_PATH = join(
     __dirname,
     "..",
+    "..",
     "dist",
     "mews-statusline.js",
   );

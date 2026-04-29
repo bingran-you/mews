@@ -8,9 +8,9 @@ dispatch local coding agents in the background.
 
 ```text
 mews/
-├── VERSION
 ├── README.md              # product overview
 ├── cli.ts                 # dispatcher
+├── version.ts             # runtime package version resolver
 └── engine/
     ├── commands/          # install, start, stop, poll, watch, doctor, cleanup, status, status-manager
     ├── daemon/            # long-lived process: broker, bus, claim, dispatcher, poller, runner, scheduler, …
@@ -25,7 +25,7 @@ mews/
 
 | Command | Role |
 |---------|------|
-| `mews install --allow-repo owner/repo` | Check `gh` / `jq` / auth, create `~/.mews/config.yaml`, and start the daemon. Statusline hook wiring is a separate manual step. |
+| `mews install --allow-repo owner/repo` | Check `gh` / auth, create `~/.mews/config.yaml`, and start the daemon. Statusline hook wiring is a separate manual step. |
 | `mews start --allow-repo owner/repo` | Launch the daemon in the background |
 | `mews stop` | Stop the daemon and remove its lock |
 | `mews status` | Print current daemon/runtime status |
@@ -59,6 +59,5 @@ umbrella CLI from it.
 
 ## Related
 
-- User-facing skill: [`skills/mews/SKILL.md`](../../../skills/mews/SKILL.md)
-- Assets (SSE dashboard HTML): [`assets/mews/`](../../../assets/mews)
+- Assets (SSE dashboard HTML): [`assets/dashboard.html`](../../../assets/dashboard.html)
 - Tests: [`tests/mews/`](../../../tests/mews)

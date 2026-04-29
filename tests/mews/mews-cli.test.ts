@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEWS_USAGE, runMews } from "../../src/mews/cli.js";
 
@@ -62,6 +65,26 @@ describe("runMews dispatcher", () => {
       expect(code).toBe(0);
       expect(output.lines[0]).toBe(MEWS_USAGE);
     }
+  });
+
+  it("prints the package version for --version, -V, and version", async () => {
+    const version = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ).version as string;
+
+    for (const flag of ["--version", "-V", "version"]) {
+      const output = captureOutput();
+      const code = await runMews([flag], output.write);
+      expect(code).toBe(0);
+      expect(output.lines).toEqual([version]);
+    }
+  });
+
+  it("routes `help <command>` to the subcommand help output", async () => {
+    const output = captureOutput();
+    const code = await runMews(["help", "start"], output.write);
+    expect(code).toBe(0);
+    expect(output.lines.join("\n")).toContain("usage: mews start");
   });
 
   it("errors with hint on unknown subcommand", async () => {

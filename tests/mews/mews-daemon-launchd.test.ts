@@ -140,7 +140,7 @@ describe("start command self-invocation helpers", () => {
     expect(self.prefixArgs).toEqual(["/opt/mews/dist/cli.mjs"]);
   });
 
-  it("prepends the cli entrypoint before mews daemon args", () => {
+  it("prepends the cli entrypoint before the daemon args", () => {
     expect(
       defaultDaemonArgs(["--allow-repo", "owner/repo"], [
         "/opt/mews/dist/cli.mjs",

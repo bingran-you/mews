@@ -18,11 +18,15 @@
 
 import { join } from "node:path";
 
+import { MEWS_VERSION } from "./version.js";
+
 export const MEWS_USAGE = `usage: mews <command>
 
   Mews is the local GitHub notification daemon. It polls your allowed
   repositories, keeps a local inbox under \`~/.mews/\`, and dispatches
   work to per-task agent runners.
+
+  Run \`mews help <command>\` for command details.
 
 Primary commands (start here):
   install               Run the first-run setup (creates config.yaml, then
@@ -46,6 +50,7 @@ Advanced commands (for agents or debugging):
 
 Options:
   --help, -h            Show this help message
+  --version, -V         Print the mews version
 
 Environment:
   MEWS_DIR            Override \`~/.mews\` (store root)
@@ -216,7 +221,19 @@ export function extractBackendFlag(args: readonly string[]): {
 
 function isHelpInvocation(args: readonly string[]): boolean {
   const first = args[0];
-  return first === "--help" || first === "-h" || first === "help";
+  return first === "--help" || first === "-h";
+}
+
+function isVersionInvocation(args: readonly string[]): boolean {
+  const first = args[0];
+  return first === "--version" || first === "-V" || first === "version";
+}
+
+function normalizeArgs(args: readonly string[]): string[] {
+  if (args[0] === "help" && args[1]) {
+    return [args[1], "--help"];
+  }
+  return [...args];
 }
 
 export async function runMews(
@@ -225,13 +242,23 @@ export async function runMews(
 ): Promise<number> {
   const write = (text: string): void => output(text);
 
-  if (args.length === 0 || isHelpInvocation(args)) {
+  if (
+    args.length === 0 ||
+    (args[0] === "help" && args.length === 1) ||
+    isHelpInvocation(args)
+  ) {
     write(MEWS_USAGE);
     return 0;
   }
 
-  const command = args[0];
-  const rest = args.slice(1);
+  if (isVersionInvocation(args)) {
+    write(MEWS_VERSION);
+    return 0;
+  }
+
+  const normalizedArgs = normalizeArgs(args);
+  const command = normalizedArgs[0];
+  const rest = normalizedArgs.slice(1);
   const target = DISPATCH[command];
 
   if (!target) {
