@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,29 +20,19 @@ const timestamp = Date.now();
 const repo = process.env.MEWS_E2E_REPO ?? "bingran-you/mews";
 const actorUser = process.env.MEWS_E2E_SECONDARY_USER;
 const actorToken = process.env.MEWS_E2E_SECONDARY_TOKEN;
-const port = Number(process.env.MEWS_E2E_HTTP_PORT ?? "8787");
+const basePort = Number(process.env.MEWS_E2E_HTTP_PORT ?? "8787");
 const pollIntervalSecs = Number(process.env.MEWS_E2E_POLL_INTERVAL_SECS ?? "5");
-const artifactsRoot = resolve(
-  repoRoot,
-  ".artifacts",
-  "live-e2e",
-  String(timestamp),
-);
-const stateRoot = join(artifactsRoot, "state");
-const runnerHome = join(stateRoot, "runner");
-const dashboardScreenshot = join(artifactsRoot, "dashboard.png");
-const daemonLog = join(artifactsRoot, "daemon.log");
-const traceFile = join(artifactsRoot, "trace.log");
+const artifactsRoot = resolve(repoRoot, ".artifacts", "live-e2e", String(timestamp));
 
-mkdirSync(artifactsRoot, { recursive: true });
-mkdirSync(stateRoot, { recursive: true });
+const realGh = execFileSync("sh", ["-lc", "command -v gh"], {
+  cwd: repoRoot,
+  encoding: "utf8",
+}).trim();
 
-let issueNumber = null;
-let daemon = null;
 let primaryUser = null;
 let switchedAccount = false;
 
-function log(line) {
+function log(traceFile, line) {
   process.stdout.write(`${line}\n`);
   writeFileSync(traceFile, `${line}\n`, { flag: "a" });
 }
@@ -46,10 +42,9 @@ function fail(message) {
 }
 
 function execGh(args, options = {}) {
-  const env = { ...process.env, ...(options.env ?? {}) };
   return execFileSync("gh", args, {
     cwd: repoRoot,
-    env,
+    env: { ...process.env, ...(options.env ?? {}) },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
@@ -71,7 +66,7 @@ async function waitFor(check, options = {}) {
   throw new Error(options.label ?? "Timed out");
 }
 
-async function fetchJson(pathname) {
+async function fetchJson(port, pathname) {
   const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
     cache: "no-store",
   });
@@ -79,10 +74,6 @@ async function fetchJson(pathname) {
     throw new Error(`GET ${pathname} failed with ${response.status}`);
   }
   return response.json();
-}
-
-function appendDaemonLog(chunk) {
-  writeFileSync(daemonLog, chunk, { flag: "a" });
 }
 
 function ensureSecondaryActor() {
@@ -150,44 +141,136 @@ function postSecondaryMention(issue, mentionBody) {
   }
 }
 
-function startDaemon() {
-  const child = spawn(
-    process.execPath,
-    [
-      "dist/cli.mjs",
-      "run",
-      "--allow-repo",
-      repo,
-      "--http-port",
-      String(port),
-      "--poll-interval-secs",
-      String(pollIntervalSecs),
-      "--dry-run",
-    ],
-    {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        MEWS_DIR: stateRoot,
-        MEWS_HOME: runnerHome,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
+function buildAgentWrapper({
+  agent,
+  wrapperPath,
+  logPath,
+}) {
+  const source =
+    agent === "codex"
+      ? `#!${process.execPath}
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+const args = process.argv.slice(2);
+const logPath = process.env.MEWS_E2E_AGENT_LOG;
+const outIndex = args.indexOf("--output-last-message");
+const outputPath = outIndex >= 0 ? args[outIndex + 1] : "";
+const promptPath = args[args.length - 1] ?? "";
+const promptText = promptPath ? readFileSync(promptPath, "utf8") : "";
+appendFileSync(logPath, JSON.stringify({
+  agent: "codex",
+  argv: args,
+  cwd: process.cwd(),
+  outputPath,
+  promptPath,
+  promptText,
+  env: {
+    MEWS_TASK_DIR: process.env.MEWS_TASK_DIR,
+    MEWS_SNAPSHOT_DIR: process.env.MEWS_SNAPSHOT_DIR,
+    MEWS_BROKER_DIR: process.env.MEWS_BROKER_DIR,
+  },
+}) + "\\n");
+if (outputPath) {
+  writeFileSync(outputPath, "MEWS_RESULT: status=handled summary=codex wrapper handled probe");
+}
+process.stdout.write("codex wrapper complete\\n");
+`
+      : `#!${process.execPath}
+import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+const promptText = args[args.length - 1] ?? "";
+appendFileSync(process.env.MEWS_E2E_AGENT_LOG, JSON.stringify({
+  agent: "claude",
+  argv: args,
+  cwd: process.cwd(),
+  promptText,
+  env: {
+    MEWS_TASK_DIR: process.env.MEWS_TASK_DIR,
+    MEWS_SNAPSHOT_DIR: process.env.MEWS_SNAPSHOT_DIR,
+    MEWS_BROKER_DIR: process.env.MEWS_BROKER_DIR,
+  },
+}) + "\\n");
+process.stdout.write("MEWS_RESULT: status=handled summary=claude wrapper handled probe\\n");
+`;
+  writeFileSync(wrapperPath, source);
+  chmodSync(wrapperPath, 0o755);
+}
+
+function createWrapperBin({
+  phaseDir,
+  agent,
+}) {
+  const binDir = join(phaseDir, "bin");
+  const agentLog = join(phaseDir, `${agent}-invocations.jsonl`);
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(
+    join(binDir, "gh"),
+    `#!/bin/sh\nexec "${realGh}" "$@"\n`,
   );
-  child.stdout.on("data", (chunk) => appendDaemonLog(chunk));
-  child.stderr.on("data", (chunk) => appendDaemonLog(chunk));
-  daemon = child;
+  chmodSync(join(binDir, "gh"), 0o755);
+  buildAgentWrapper({
+    agent,
+    wrapperPath: join(binDir, agent),
+    logPath: agentLog,
+  });
+  return { binDir, agentLog };
+}
+
+function makePhaseRuntime(name, index) {
+  const phaseDir = join(artifactsRoot, name);
+  const stateDir = join(phaseDir, "state");
+  const runnerHome = join(stateDir, "runner");
+  mkdirSync(phaseDir, { recursive: true });
+  mkdirSync(stateDir, { recursive: true });
+  return {
+    name,
+    phaseDir,
+    stateDir,
+    runnerHome,
+    port: basePort + index,
+    dashboardScreenshot: join(phaseDir, "dashboard.png"),
+    daemonLog: join(phaseDir, "daemon.log"),
+    traceFile: join(phaseDir, "trace.log"),
+    inboxFile: join(phaseDir, "inbox.json"),
+    tasksFile: join(phaseDir, "tasks.json"),
+    activityFile: join(phaseDir, "activity.json"),
+  };
+}
+
+function startDaemon(phase, options = {}) {
+  const args = [
+    "dist/cli.mjs",
+    "run",
+    "--allow-repo",
+    repo,
+    "--http-port",
+    String(phase.port),
+    "--poll-interval-secs",
+    String(pollIntervalSecs),
+  ];
+  if (options.dryRun) args.push("--dry-run");
+
+  const child = spawn(process.execPath, args, {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ...options.extraEnv,
+      MEWS_DIR: phase.stateDir,
+      MEWS_HOME: phase.runnerHome,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.on("data", (chunk) => writeFileSync(phase.daemonLog, chunk, { flag: "a" }));
+  child.stderr.on("data", (chunk) => writeFileSync(phase.daemonLog, chunk, { flag: "a" }));
   return child;
 }
 
-async function stopDaemon() {
-  if (!daemon) return;
-  if (daemon.exitCode !== null) return;
-  daemon.kill("SIGTERM");
-  await new Promise((resolvePromise) => daemon.once("exit", resolvePromise));
+async function stopDaemon(child) {
+  if (!child || child.exitCode !== null) return;
+  child.kill("SIGTERM");
+  await new Promise((resolvePromise) => child.once("exit", resolvePromise));
 }
 
-async function closeProbeIssue() {
+async function closeProbeIssue(issueNumber) {
   if (issueNumber === null) return;
   try {
     execGh([
@@ -199,123 +282,206 @@ async function closeProbeIssue() {
       "--comment",
       "Closing temporary mews live e2e probe.",
     ]);
-  } catch (error) {
-    log(`WARN: failed to close probe issue #${issueNumber}: ${String(error)}`);
+  } catch {
+    // best effort
   }
 }
 
-async function verifyDashboard(title) {
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-  } catch (error) {
-    fail(
-      `Could not launch Chromium. Run \`pnpm e2e:live:install-browser\` first. ${String(error)}`,
-    );
-  }
-
+async function verifyDashboard({
+  phase,
+  title,
+  expectedStatus,
+}) {
+  const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.goto(`http://127.0.0.1:${port}/dashboard`, {
+    await page.goto(`http://127.0.0.1:${phase.port}/dashboard`, {
       waitUntil: "domcontentloaded",
     });
     await page.locator("#rows tr", { hasText: title }).waitFor({
       timeout: 90_000,
     });
     const taskRow = page.locator("#task-rows tr", { hasText: title });
-    await taskRow.waitFor({
+    await taskRow.waitFor({ timeout: 90_000 });
+    await taskRow.locator(".badge", { hasText: expectedStatus }).first().waitFor({
       timeout: 90_000,
     });
-    await taskRow.getByText("simulated").waitFor({ timeout: 90_000 });
-    await page.screenshot({ path: dashboardScreenshot, fullPage: true });
+    await page.screenshot({ path: phase.dashboardScreenshot, fullPage: true });
   } finally {
     await browser.close();
+  }
+}
+
+function parseAgentLog(logPath) {
+  if (!existsSync(logPath)) return [];
+  return readFileSync(logPath, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+async function runPhase({
+  index,
+  name,
+  mode,
+}) {
+  const phase = makePhaseRuntime(name, index);
+  const title = `[mews live e2e ${name} ${timestamp}]`;
+  const mentionBody = `@${primaryUser} live mews ${name} probe from a secondary actor.`;
+  const issueNumber = createProbeIssue(title);
+  let daemon;
+  let agentLogPath = null;
+
+  log(phase.traceFile, `Artifacts: ${phase.phaseDir}`);
+  log(phase.traceFile, `Created probe issue #${issueNumber}`);
+
+  try {
+    if (mode === "dry-run") {
+      daemon = startDaemon(phase, { dryRun: true });
+    } else {
+      const wrapper = createWrapperBin({ phaseDir: phase.phaseDir, agent: mode });
+      agentLogPath = wrapper.agentLog;
+      daemon = startDaemon(phase, {
+        extraEnv: {
+          PATH: `${wrapper.binDir}:/usr/bin:/bin:/usr/sbin:/sbin`,
+          MEWS_E2E_AGENT_LOG: agentLogPath,
+        },
+      });
+    }
+
+    await waitFor(
+      async () => {
+        try {
+          const response = await fetch(`http://127.0.0.1:${phase.port}/healthz`);
+          return response.ok;
+        } catch {
+          return false;
+        }
+      },
+      { label: `${name}: daemon health check did not come up` },
+    );
+
+    postSecondaryMention(issueNumber, mentionBody);
+    log(phase.traceFile, "Posted secondary mention comment");
+
+    const inboxPayload = await waitFor(
+      async () => {
+        try {
+          const payload = await fetchJson(phase.port, "/inbox");
+          return payload.notifications?.some((entry) => entry.title === title)
+            ? payload
+            : null;
+        } catch {
+          return null;
+        }
+      },
+      { label: `${name}: probe issue never appeared in /inbox` },
+    );
+    writeFileSync(phase.inboxFile, JSON.stringify(inboxPayload, null, 2));
+
+    const expectedTaskStatus = mode === "dry-run" ? "simulated" : "handled";
+    const tasksPayload = await waitFor(
+      async () => {
+        try {
+          const payload = await fetchJson(phase.port, "/tasks");
+          return payload.tasks?.some(
+            (task) => task.title === title && task.status === expectedTaskStatus,
+          )
+            ? payload
+            : null;
+        } catch {
+          return null;
+        }
+      },
+      { label: `${name}: probe task never appeared in /tasks` },
+    );
+    writeFileSync(phase.tasksFile, JSON.stringify(tasksPayload, null, 2));
+    const matchingTask = tasksPayload.tasks.find(
+      (task) => task.title === title && task.status === expectedTaskStatus,
+    );
+    if (!matchingTask) {
+      fail(`${name}: tasks payload did not include the probe task`);
+    }
+
+    const activityPayload = await fetchJson(phase.port, "/activity");
+    writeFileSync(phase.activityFile, JSON.stringify(activityPayload, null, 2));
+
+    if (mode !== "dry-run" && agentLogPath) {
+      const invocations = parseAgentLog(agentLogPath);
+      const matching = invocations.find((entry) => {
+        const taskDir = String(entry?.env?.MEWS_TASK_DIR ?? "");
+        const outputPath = String(entry?.outputPath ?? "");
+        return taskDir.includes(matchingTask.task_id) || outputPath.includes(matchingTask.task_id);
+      });
+      if (!matching) {
+        fail(`${name}: wrapper log never captured the probe prompt`);
+      }
+      if (mode === "codex") {
+        const argv = matching.argv ?? [];
+        if (
+          argv[0] !== "exec" ||
+          !argv.includes("--cd") ||
+          !argv.includes("--dangerously-bypass-approvals-and-sandbox") ||
+          !argv.includes("--output-last-message")
+        ) {
+          fail(`${name}: codex wrapper did not receive the expected argv`);
+        }
+      } else {
+        const argv = matching.argv ?? [];
+        if (
+          argv[0] !== "-p" ||
+          !argv.includes("--permission-mode") ||
+          !argv.includes("bypassPermissions")
+        ) {
+          fail(`${name}: claude wrapper did not receive the expected argv`);
+        }
+        if (!matching.cwd || !String(matching.cwd).includes("/workspaces/")) {
+          fail(`${name}: claude wrapper did not run in a workspace cwd`);
+        }
+      }
+    }
+
+    await verifyDashboard({
+      phase,
+      title,
+      expectedStatus: expectedTaskStatus,
+    });
+    log(phase.traceFile, `Dashboard screenshot: ${phase.dashboardScreenshot}`);
+    log(phase.traceFile, `${name} verification passed.`);
+  } finally {
+    await closeProbeIssue(issueNumber);
+    await stopDaemon(daemon);
   }
 }
 
 async function main() {
   ensureSecondaryActor();
   detectPrimaryUser();
-  log(`Primary GitHub user: ${primaryUser}`);
-  log(`Artifacts: ${artifactsRoot}`);
-
+  mkdirSync(artifactsRoot, { recursive: true });
   if (!existsSync(join(repoRoot, "dist", "cli.mjs"))) {
     fail("dist/cli.mjs is missing. Run `pnpm build` first.");
   }
 
-  const title = `[mews live e2e ${timestamp}]`;
-  const mentionBody = `@${primaryUser} live mews end-to-end probe from a secondary actor.`;
+  log(join(artifactsRoot, "trace.log"), `Primary GitHub user: ${primaryUser}`);
+  log(join(artifactsRoot, "trace.log"), `Artifacts root: ${artifactsRoot}`);
 
-  startDaemon();
-  await waitFor(
-    async () => {
-      try {
-        const response = await fetch(`http://127.0.0.1:${port}/healthz`);
-        return response.ok;
-      } catch {
-        return false;
-      }
-    },
-    { label: "Daemon health check did not come up" },
-  );
+  await runPhase({ index: 0, name: "dry-run", mode: "dry-run" });
+  await runPhase({ index: 1, name: "codex", mode: "codex" });
+  await runPhase({ index: 2, name: "claude", mode: "claude" });
 
-  issueNumber = createProbeIssue(title);
-  log(`Created probe issue #${issueNumber}`);
-  postSecondaryMention(issueNumber, mentionBody);
-  log("Posted secondary mention comment");
-
-  const inboxPayload = await waitFor(
-    async () => {
-      try {
-        const payload = await fetchJson("/inbox");
-        return payload.notifications?.some((entry) => entry.title === title)
-          ? payload
-          : null;
-      } catch {
-        return null;
-      }
-    },
-    { label: "Probe issue never appeared in /inbox" },
-  );
-  writeFileSync(
-    join(artifactsRoot, "inbox.json"),
-    JSON.stringify(inboxPayload, null, 2),
-  );
-
-  const tasksPayload = await waitFor(
-    async () => {
-      try {
-        const payload = await fetchJson("/tasks");
-        return payload.tasks?.some((task) => task.title === title)
-          ? payload
-          : null;
-      } catch {
-        return null;
-      }
-    },
-    { label: "Probe task never appeared in /tasks" },
-  );
-  writeFileSync(
-    join(artifactsRoot, "tasks.json"),
-    JSON.stringify(tasksPayload, null, 2),
-  );
-
-  const activityPayload = await fetchJson("/activity");
-  writeFileSync(
-    join(artifactsRoot, "activity.json"),
-    JSON.stringify(activityPayload, null, 2),
-  );
-
-  await verifyDashboard(title);
-
-  log(`Dashboard screenshot: ${dashboardScreenshot}`);
-  log("Live mews end-to-end verification passed.");
+  log(join(artifactsRoot, "trace.log"), "Full live mews end-to-end verification passed.");
 }
 
 try {
   await main();
 } catch (error) {
-  log(`ERROR: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+  const traceFile = join(artifactsRoot, "trace.log");
+  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  if (existsSync(dirname(traceFile))) {
+    log(traceFile, `ERROR: ${message}`);
+  } else {
+    process.stdout.write(`ERROR: ${message}\n`);
+  }
   process.exitCode = 1;
 } finally {
   if (switchedAccount && primaryUser) {
@@ -325,6 +491,4 @@ try {
       // best effort
     }
   }
-  await closeProbeIssue();
-  await stopDaemon();
 }
