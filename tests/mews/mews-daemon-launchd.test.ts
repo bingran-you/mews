@@ -135,18 +135,18 @@ describe("collectLaunchdPassthroughEnvVars", () => {
 
 describe("start command self-invocation helpers", () => {
   it("resolves the current node + cli entrypoint pair", () => {
-    const self = resolveSelfCliInvocation("/opt/mews/dist/cli.js");
+    const self = resolveSelfCliInvocation("/opt/mews/dist/cli.mjs");
     expect(self.executable).toBe(process.execPath);
-    expect(self.prefixArgs).toEqual(["/opt/mews/dist/cli.js"]);
+    expect(self.prefixArgs).toEqual(["/opt/mews/dist/cli.mjs"]);
   });
 
   it("prepends the cli entrypoint before mews daemon args", () => {
     expect(
       defaultDaemonArgs(["--allow-repo", "owner/repo"], [
-        "/opt/mews/dist/cli.js",
+        "/opt/mews/dist/cli.mjs",
       ]),
     ).toEqual([
-      "/opt/mews/dist/cli.js",
+      "/opt/mews/dist/cli.mjs",
       "mews",
       "daemon",
       "--backend=ts",

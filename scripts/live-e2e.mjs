@@ -154,7 +154,7 @@ function startDaemon() {
   const child = spawn(
     process.execPath,
     [
-      "dist/cli.js",
+      "dist/cli.mjs",
       "run",
       "--allow-repo",
       repo,
@@ -239,8 +239,8 @@ async function main() {
   log(`Primary GitHub user: ${primaryUser}`);
   log(`Artifacts: ${artifactsRoot}`);
 
-  if (!existsSync(join(repoRoot, "dist", "cli.js"))) {
-    fail("dist/cli.js is missing. Run `pnpm build` first.");
+  if (!existsSync(join(repoRoot, "dist", "cli.mjs"))) {
+    fail("dist/cli.mjs is missing. Run `pnpm build` first.");
   }
 
   const title = `[mews live e2e ${timestamp}]`;
